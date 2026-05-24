@@ -69,6 +69,22 @@ public sealed class FileAssetEditStore(IHostEnvironment environment) : IAssetEdi
         }
     }
 
+    public async Task ClearAsync(CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            if (File.Exists(_filePath))
+            {
+                File.Delete(_filePath);
+            }
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
     public async Task<UploadedInventorySnapshot> ApplyEditsAsync(UploadedInventorySnapshot snapshot, CancellationToken cancellationToken = default)
     {
         var edits = await GetAllAsync(cancellationToken);

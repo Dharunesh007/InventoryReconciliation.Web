@@ -8,5 +8,6 @@ public interface IAssetEditStore
     Task<IReadOnlyDictionary<string, AssetEditEntry>> GetAllAsync(CancellationToken cancellationToken = default);
     Task SaveAsync(AssetEditRequest request, CancellationToken cancellationToken = default);
     Task SaveManyAsync(IEnumerable<AssetEditRequest> requests, CancellationToken cancellationToken = default);
+    Task ClearAsync(CancellationToken cancellationToken = default);
     Task<UploadedInventorySnapshot> ApplyEditsAsync(UploadedInventorySnapshot snapshot, CancellationToken cancellationToken = default);
 }

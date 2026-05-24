@@ -1,5 +1,8 @@
 @page "/inventory-upload"
 @inject IUploadedInventorySource UploadedInventorySource
+@inject IUploadedWorkbookStorage WorkbookStorage
+@inject IAssetEditStore AssetEditStore
+@inject ISnackbar Snackbar
 
 <PageHeader Eyebrow="Master inventory import" Title="Uploaded Workbook Profile" Summary="@HeaderSummary">
     <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync">Refresh Workbook</MudButton>
@@ -19,7 +22,21 @@ else
         <MudItem xs="12" lg="4">
             <MudPaper Class="workspace-panel upload-zone" Elevation="0">
                 <MudIcon Icon="@Icons.Material.Filled.UploadFile" Size="Size.Large" />
-                <MudText Typo="Typo.h6">@_snapshot.SourceFileName</MudText>
+                <MudText Typo="Typo.h6">@(_snapshot.TotalRows == 0 ? "Upload inventory workbook" : _snapshot.SourceFileName)</MudText>
+                <MudText Typo="Typo.body2" Class="muted">Choose an .xlsx file. The hosted app will save it as the active workbook.</MudText>
+                <label class="workbook-upload-button" for="inventory-workbook-input">
+                    <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" />
+                    <span>@(_isUploading ? "Uploading..." : "Choose Excel Workbook")</span>
+                </label>
+                <InputFile id="inventory-workbook-input"
+                           OnChange="UploadWorkbookAsync"
+                           accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                           disabled="@_isUploading"
+                           class="workbook-file-input" />
+                @if (_uploadMessage is not null)
+                {
+                    <MudText Typo="Typo.body2" Class="upload-result">@_uploadMessage</MudText>
+                }
                 <MudText Typo="Typo.body2" Class="muted">@_snapshot.SourcePath</MudText>
                 <StatusPill Text="@($"{_snapshot.TotalRows:N0} rows loaded")" Tone="info" />
             </MudPaper>
@@ -81,7 +98,11 @@ else
 }
 
 @code {
+    private const long MaxUploadBytes = 50 * 1024 * 1024;
+
     private UploadedInventorySnapshot? _snapshot;
+    private bool _isUploading;
+    private string? _uploadMessage;
 
     private string HeaderSummary => _snapshot is null
         ? "Loading the workbook you uploaded."
@@ -92,6 +113,48 @@ else
     private async Task LoadAsync()
     {
         _snapshot = await UploadedInventorySource.GetSnapshotAsync();
+    }
+
+    private async Task UploadWorkbookAsync(InputFileChangeEventArgs args)
+    {
+        var file = args.File;
+        if (file is null)
+        {
+            return;
+        }
+
+        if (!Path.GetExtension(file.Name).Equals(".xlsx", StringComparison.OrdinalIgnoreCase))
+        {
+            Snackbar.Add("Please select a valid .xlsx Excel workbook.", Severity.Warning);
+            return;
+        }
+
+        _isUploading = true;
+        _uploadMessage = null;
+
+        try
+        {
+            await using var stream = file.OpenReadStream(MaxUploadBytes);
+            var result = await WorkbookStorage.SaveAsync(file.Name, stream);
+            await AssetEditStore.ClearAsync();
+            _snapshot = await UploadedInventorySource.GetSnapshotAsync();
+            _uploadMessage = $"Uploaded {result.OriginalFileName} and loaded {_snapshot.TotalRows:N0} rows.";
+            Snackbar.Add("Workbook uploaded and activated.", Severity.Success);
+        }
+        catch (IOException)
+        {
+            _uploadMessage = "Upload failed because the workbook is larger than 50 MB.";
+            Snackbar.Add(_uploadMessage, Severity.Error);
+        }
+        catch (Exception exception)
+        {
+            _uploadMessage = exception.Message;
+            Snackbar.Add($"Upload failed: {exception.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isUploading = false;
+        }
     }
 
     private int MappedColumnCount => ColumnRows.Count(row => row.Target != "Custom / unmapped");

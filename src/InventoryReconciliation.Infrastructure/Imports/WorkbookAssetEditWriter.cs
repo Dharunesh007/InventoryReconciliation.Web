@@ -1,11 +1,10 @@
 using ClosedXML.Excel;
 using InventoryReconciliation.Application.Abstractions;
 using InventoryReconciliation.Application.Assets;
-using Microsoft.Extensions.Configuration;
 
 namespace InventoryReconciliation.Infrastructure.Imports;
 
-public sealed class WorkbookAssetEditWriter(IConfiguration configuration, IAssetEditStore assetEditStore) : IWorkbookAssetEditWriter
+public sealed class WorkbookAssetEditWriter(IUploadedWorkbookStorage workbookStorage, IAssetEditStore assetEditStore) : IWorkbookAssetEditWriter
 {
     private readonly SemaphoreSlim _lock = new(1, 1);
 
@@ -56,10 +55,7 @@ public sealed class WorkbookAssetEditWriter(IConfiguration configuration, IAsset
 
     private FileInfo GetWorkbookFile()
     {
-        var path = Environment.ExpandEnvironmentVariables(
-            configuration["InventorySource:UploadedWorkbookPath"]
-            ?? @"%USERPROFILE%\Downloads\IT Asset inv.xlsx");
-        var file = new FileInfo(path);
+        var file = workbookStorage.GetWorkbookFile();
         if (!file.Exists)
         {
             throw new FileNotFoundException($"Uploaded workbook was not found: {file.FullName}", file.FullName);

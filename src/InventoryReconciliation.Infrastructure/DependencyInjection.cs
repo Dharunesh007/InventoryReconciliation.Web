@@ -28,6 +28,7 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork>(provider => provider.GetRequiredService<AppDbContext>());
         services.AddScoped<IExcelInventoryReader, ClosedXmlInventoryReader>();
         services.AddSingleton<IAssetEditStore, FileAssetEditStore>();
+        services.AddSingleton<IUploadedWorkbookStorage, FileUploadedWorkbookStorage>();
         services.AddSingleton<IWorkbookAssetEditWriter, WorkbookAssetEditWriter>();
         services.AddSingleton<IUploadedInventorySource, WorkbookUploadedInventorySource>();
         services.AddHttpContextAccessor();

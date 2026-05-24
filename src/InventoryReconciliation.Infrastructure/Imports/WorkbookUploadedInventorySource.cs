@@ -1,11 +1,10 @@
 using ClosedXML.Excel;
 using InventoryReconciliation.Application.Abstractions;
 using InventoryReconciliation.Application.Assets;
-using Microsoft.Extensions.Configuration;
 
 namespace InventoryReconciliation.Infrastructure.Imports;
 
-public sealed class WorkbookUploadedInventorySource(IConfiguration configuration, IAssetEditStore assetEditStore) : IUploadedInventorySource
+public sealed class WorkbookUploadedInventorySource(IUploadedWorkbookStorage workbookStorage, IAssetEditStore assetEditStore) : IUploadedInventorySource
 {
     private readonly SemaphoreSlim _lock = new(1, 1);
     private UploadedInventorySnapshot? _cached;
@@ -14,11 +13,7 @@ public sealed class WorkbookUploadedInventorySource(IConfiguration configuration
 
     public async Task<UploadedInventorySnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default)
     {
-        var path = Environment.ExpandEnvironmentVariables(
-            configuration["InventorySource:UploadedWorkbookPath"]
-            ?? @"%USERPROFILE%\Downloads\IT Asset inv.xlsx");
-
-        var file = new FileInfo(path);
+        var file = workbookStorage.GetWorkbookFile();
         var lastModified = file.Exists ? file.LastWriteTimeUtc : (DateTime?)null;
         var editRevision = await assetEditStore.GetRevisionAsync(cancellationToken);
 
@@ -38,7 +33,7 @@ public sealed class WorkbookUploadedInventorySource(IConfiguration configuration
 
             var snapshot = file.Exists
                 ? LoadWorkbook(file)
-                : EmptySnapshot(path);
+                : EmptySnapshot(file.FullName);
             _cached = await assetEditStore.ApplyEditsAsync(snapshot, cancellationToken);
             _cachedLastModified = lastModified;
             _cachedEditRevision = editRevision;

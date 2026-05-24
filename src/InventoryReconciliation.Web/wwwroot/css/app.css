@@ -1481,6 +1481,48 @@ kbd {
     border-style: dashed;
 }
 
+.workbook-upload-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: fit-content;
+    min-height: 42px;
+    padding: 0 16px;
+    border: 1px solid color-mix(in srgb, var(--mud-palette-primary) 45%, var(--border-soft));
+    border-radius: 12px;
+    color: var(--text-strong);
+    background:
+        linear-gradient(135deg, color-mix(in srgb, var(--mud-palette-primary) 28%, transparent), transparent),
+        color-mix(in srgb, var(--surface-base) 82%, transparent);
+    box-shadow: 0 16px 34px color-mix(in srgb, var(--mud-palette-primary) 12%, transparent);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 900;
+    transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.workbook-upload-button:hover {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--mud-palette-primary) 68%, var(--border-soft));
+}
+
+.workbook-file-input {
+    position: fixed !important;
+    left: -10000px !important;
+    top: 0 !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+.upload-result {
+    color: var(--mud-palette-success);
+    font-weight: 850;
+}
+
 .asset-card {
     display: grid;
     gap: 14px;
