@@ -1,0 +1,10 @@
+<span class="status-pill @ClassName">
+    <span class="status-dot"></span>
+    @Text
+</span>
+
+@code {
+    [Parameter] public string Text { get; set; } = "Pending";
+    [Parameter] public string Tone { get; set; } = "neutral";
+    private string ClassName => $"status-{Tone.ToLowerInvariant()}";
+}

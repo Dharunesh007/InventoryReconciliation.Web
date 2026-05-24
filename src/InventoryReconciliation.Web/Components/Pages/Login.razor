@@ -1,0 +1,41 @@
+@page "/login"
+@attribute [AllowAnonymous]
+@inject IUploadedInventorySource UploadedInventorySource
+
+<main class="login-screen">
+    <section class="login-panel">
+        <div class="brand-lockup large">
+            <span class="brand-mark">IR</span>
+            <div>
+                <MudText Typo="Typo.h4">Inventory Reconciliation</MudText>
+                <MudText Typo="Typo.body2">Enterprise IT asset governance and physical verification</MudText>
+            </div>
+        </div>
+        <div class="login-card">
+            <MudText Typo="Typo.h5">Secure sign-in</MudText>
+            <MudText Typo="Typo.body2" Class="muted">Use Azure Entra ID SSO with MFA and role-based access.</MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Login" Href="MicrosoftIdentity/Account/SignIn">Continue with Entra ID</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.DeveloperMode" Href="/">Open development console</MudButton>
+        </div>
+    </section>
+    <section class="login-insights">
+        <MetricTile Label="Uploaded assets" Value="@(_snapshot?.TotalRows.ToString("N0") ?? "...")" Delta="@(_snapshot?.SourceFileName ?? "Loading workbook")" Trend="Source only" Accent="#3B63F3" Icon="@Icons.Material.Filled.DevicesOther" Progress="100" />
+        <MetricTile Label="Duplicate tags" Value="@(_snapshot?.DuplicateAssetTags.Count.ToString("N0") ?? "...")" Delta="Requires review before approval" Trend="@DuplicateTagTrend" Accent="#E5484D" Icon="@Icons.Material.Filled.WarningAmber" Progress="@DuplicateProgress" />
+        <MetricTile Label="Verification cases" Value="0" Delta="No physical observations submitted" Trend="Not started" Accent="#0E9F6E" Icon="@Icons.Material.Filled.VerifiedUser" Progress="0" />
+    </section>
+</main>
+
+@code {
+    private UploadedInventorySnapshot? _snapshot;
+
+    private string DuplicateTagTrend =>
+        _snapshot is null ? "Loading" : _snapshot.DuplicateAssetTags.Count == 0 ? "Clear" : "Review";
+
+    private int DuplicateProgress =>
+        _snapshot is null ? 0 : _snapshot.DuplicateAssetTags.Count == 0 ? 100 : 35;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _snapshot = await UploadedInventorySource.GetSnapshotAsync();
+    }
+}

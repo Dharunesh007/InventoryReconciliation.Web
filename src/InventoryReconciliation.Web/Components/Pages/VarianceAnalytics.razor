@@ -1,0 +1,138 @@
+@page "/variance-analytics"
+@inject IUploadedInventorySource UploadedInventorySource
+
+<PageHeader Eyebrow="Intelligence" Title="Variance Analytics" Summary="Workbook analytics are active now. Reconciliation variance charts will activate after physical verification submissions.">
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync">Refresh Workbook</MudButton>
+</PageHeader>
+
+@if (_snapshot is null)
+{
+    <MudPaper Class="empty-state" Elevation="0">
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        <MudText Typo="Typo.h6">Loading uploaded workbook</MudText>
+    </MudPaper>
+}
+else
+{
+    <section class="density-strip">
+        <div class="density-tile">
+            <span>Uploaded rows</span>
+            <strong>@_snapshot.TotalRows.ToString("N0")</strong>
+        </div>
+        <div class="density-tile">
+            <span>Duplicate tags</span>
+            <strong>@_snapshot.DuplicateAssetTags.Count.ToString("N0")</strong>
+        </div>
+        <div class="density-tile">
+            <span>Duplicate serials</span>
+            <strong>@_snapshot.DuplicateSerialNumbers.Count.ToString("N0")</strong>
+        </div>
+        <div class="density-tile">
+            <span>Formula errors</span>
+            <strong>@_snapshot.FormulaErrorCells.ToString("N0")</strong>
+        </div>
+    </section>
+
+    <MudGrid>
+        <MudItem xs="12" md="8">
+            <MudPaper Class="workspace-panel" Elevation="0">
+                <div class="panel-title-row">
+                    <div>
+                        <MudText Typo="Typo.h6">Manufacturer Distribution</MudText>
+                        <MudText Typo="Typo.body2" Class="muted">Calculated from uploaded master inventory only.</MudText>
+                    </div>
+                </div>
+                <div class="trend-chart tall">
+                    @foreach (var point in ManufacturerBars)
+                    {
+                        <div class="trend-column">
+                            <div class="bar-stack">
+                                <span class="verified-bar" style="@($"height:{point.Height}px")"></span>
+                            </div>
+                            <small>@point.Label</small>
+                        </div>
+                    }
+                </div>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudPaper Class="workspace-panel" Elevation="0">
+                <MudText Typo="Typo.h6">Uploaded Asset Types</MudText>
+                @foreach (var item in AssetTypes)
+                {
+                    <div class="progress-row">
+                        <div><strong>@item.Name</strong><span>@item.Count records</span></div>
+                        <MudProgressLinear Value="@item.Percent" Rounded="true" Color="Color.Primary" />
+                    </div>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudPaper Class="workspace-panel" Elevation="0">
+        <MudText Typo="Typo.h6">Data Quality Findings</MudText>
+        <MudTable Items="QualityRows" Dense="true" Hover="true" Class="enterprise-table">
+            <HeaderContent><MudTh>Finding</MudTh><MudTh>Count</MudTh><MudTh>Status</MudTh></HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.Name</MudTd>
+                <MudTd>@context.Count</MudTd>
+                <MudTd><StatusPill Text="@context.Status" Tone="@context.Tone" /></MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudPaper>
+}
+
+@code {
+    private UploadedInventorySnapshot? _snapshot;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _snapshot = await UploadedInventorySource.GetSnapshotAsync();
+    }
+
+    private IEnumerable<BarMetric> ManufacturerBars => BuildBars(_snapshot!.Assets.Select(asset => Clean(asset.Manufacturer, "Unknown")));
+    private IEnumerable<ProgressMetric> AssetTypes => BuildProgress(_snapshot!.Assets.Select(asset => Clean(asset.AssetType, "Unknown")));
+
+    private IEnumerable<QualityRow> QualityRows
+    {
+        get
+        {
+            var snapshot = _snapshot!;
+            yield return new("Duplicate asset tags", snapshot.DuplicateAssetTags.Count, snapshot.DuplicateAssetTags.Count == 0 ? "Clear" : "Review", snapshot.DuplicateAssetTags.Count == 0 ? "success" : "critical");
+            yield return new("Duplicate serial numbers", snapshot.DuplicateSerialNumbers.Count, snapshot.DuplicateSerialNumbers.Count == 0 ? "Clear" : "Review", snapshot.DuplicateSerialNumbers.Count == 0 ? "success" : "warning");
+            yield return new("Formula error cells", snapshot.FormulaErrorCells, snapshot.FormulaErrorCells == 0 ? "Clear" : "Source issue", snapshot.FormulaErrorCells == 0 ? "success" : "warning");
+            yield return new("Verification variances", 0, "Not started", "info");
+        }
+    }
+
+    private static IEnumerable<BarMetric> BuildBars(IEnumerable<string> values)
+    {
+        var groups = values.GroupBy(value => value)
+            .Select(group => new { Label = group.Key, Count = group.Count() })
+            .OrderByDescending(group => group.Count)
+            .Take(7)
+            .ToArray();
+        var max = Math.Max(groups.Select(group => group.Count).DefaultIfEmpty(1).Max(), 1);
+        return groups.Select(group => new BarMetric(group.Label, Math.Max(24, (int)Math.Round(group.Count / (double)max * 260))));
+    }
+
+    private static IEnumerable<ProgressMetric> BuildProgress(IEnumerable<string> values)
+    {
+        var groups = values.GroupBy(value => value)
+            .Select(group => new { Name = group.Key, Count = group.Count() })
+            .OrderByDescending(group => group.Count)
+            .Take(6)
+            .ToArray();
+        var total = Math.Max(groups.Sum(group => group.Count), 1);
+        return groups.Select(group => new ProgressMetric(group.Name, group.Count, (int)Math.Round(group.Count / (double)total * 100)));
+    }
+
+    private static string Clean(string? value, string fallback) =>
+        string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+
+    private sealed record BarMetric(string Label, int Height);
+    private sealed record ProgressMetric(string Name, int Count, int Percent);
+    private sealed record QualityRow(string Name, int Count, string Status, string Tone);
+}

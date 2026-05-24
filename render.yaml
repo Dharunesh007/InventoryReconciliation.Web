@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: inventory-reconciliation-web
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ASPNETCORE_URLS
+        value: http://+:8080
+      - key: Authentication__EnableEntraId
+        value: false
+      - key: Development__InitializeDatabase
+        value: false
+      - key: Development__SeedDemoData
+        value: false
+      - key: InventorySource__UploadedWorkbookPath
+        value: /app/App_Data/ITAssetImportTemplate.xlsx

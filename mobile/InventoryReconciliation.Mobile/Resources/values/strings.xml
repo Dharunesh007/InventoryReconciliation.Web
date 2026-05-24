@@ -1,0 +1,9 @@
+<resources>
+  <string name="app_name">ReconIQ Audit</string>
+  <string name="azure_app_url">https://inventoryreconciliation.azurewebsites.net/</string>
+  <string name="offline_title">Connection required</string>
+  <string name="offline_message">ReconIQ Audit needs access to the Azure-hosted inventory portal. Check connectivity or VPN and retry.</string>
+  <string name="retry">Retry</string>
+  <string name="config_azure_app_url_title">Azure App Service URL</string>
+  <string name="config_azure_app_url_description">HTTPS URL for the Azure-hosted Inventory Reconciliation web app.</string>
+</resources>

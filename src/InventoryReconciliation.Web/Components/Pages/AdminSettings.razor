@@ -1,0 +1,30 @@
+@page "/admin-settings"
+
+<PageHeader Eyebrow="Platform governance" Title="Admin Settings" Summary="Configure import policies, reconciliation thresholds, security posture, integrations, and operational SLAs.">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save">Save Settings</MudButton>
+</PageHeader>
+
+<MudGrid>
+    <MudItem xs="12" md="6">
+        <MudPaper Class="workspace-panel" Elevation="0">
+            <MudText Typo="Typo.h6">Reconciliation Rules</MudText>
+            <MudText Typo="Typo.body2" Class="muted">Critical mismatch threshold</MudText>
+            <MudSlider T="int" Value="@(65)" Min="0" Max="100" Step="1" Color="Color.Primary" />
+            <MudSwitch T="bool" Value="@(true)" Color="Color.Success" Label="Require image evidence for critical mismatches" />
+            <MudSwitch T="bool" Value="@(true)" Color="Color.Success" Label="Auto-close exact matches" />
+            <MudSwitch T="bool" Value="@(true)" Color="Color.Success" Label="Hold duplicate asset tags from bulk approval" />
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" md="6">
+        <MudPaper Class="workspace-panel" Elevation="0">
+            <MudText Typo="Typo.h6">Azure Integrations</MudText>
+            <div class="integration-list">
+                <span><MudIcon Icon="@Icons.Material.Filled.Security" /> Entra ID SSO + MFA</span>
+                <span><MudIcon Icon="@Icons.Material.Filled.Storage" /> Azure SQL with row-level security</span>
+                <span><MudIcon Icon="@Icons.Material.Filled.Cloud" /> Blob evidence storage</span>
+                <span><MudIcon Icon="@Icons.Material.Filled.MonitorHeart" /> Application Insights telemetry</span>
+                <span><MudIcon Icon="@Icons.Material.Filled.Key" /> Key Vault secret references</span>
+            </div>
+        </MudPaper>
+    </MudItem>
+</MudGrid>

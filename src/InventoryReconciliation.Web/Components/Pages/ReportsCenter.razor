@@ -1,0 +1,65 @@
+@page "/reports"
+
+<PageHeader Eyebrow="Reporting" Title="Reports Center" Summary="Download workbook-based governance reports from the uploaded inventory and saved reconciliation changes.">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Inventory" Href="/api/reports/pack">Generate Pack</MudButton>
+</PageHeader>
+
+<MudGrid>
+    @foreach (var report in Reports)
+    {
+        <MudItem xs="12" sm="6" lg="4">
+            <MudPaper Class="report-card" Elevation="0">
+                <MudIcon Icon="@report.Icon" />
+                <div>
+                    <MudText Typo="Typo.h6">@report.Name</MudText>
+                    <MudText Typo="Typo.body2" Class="muted">@report.Description</MudText>
+                </div>
+                <div class="report-actions">
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@string.Join(" / ", report.Formats.Select(FormatLabel))</MudChip>
+                    <div class="report-format-actions">
+                        @foreach (var format in report.Formats)
+                        {
+                            <MudButton Size="Size.Small"
+                                       Variant="Variant.Outlined"
+                                       StartIcon="@FormatIcon(format)"
+                                       Href="@ReportUrl(report.Slug, format)">
+                                @FormatLabel(format)
+                            </MudButton>
+                        }
+                    </div>
+                </div>
+            </MudPaper>
+        </MudItem>
+    }
+</MudGrid>
+
+@code {
+    private readonly ReportCard[] Reports =
+    [
+        new("verification-summary", "Verification Summary", "Executive progress and uploaded workbook completion summary.", ["xlsx", "csv", "pdf"], Icons.Material.Filled.FactCheck),
+        new("variance-summary", "Variance Summary", "Saved change points by variance type, field, previous value, and new value.", ["xlsx", "csv", "pdf"], Icons.Material.Filled.CompareArrows),
+        new("missing-assets", "Missing Assets", "Assets marked missing, inactive, or not found in the uploaded workbook.", ["csv", "xlsx", "pdf"], Icons.Material.Filled.ReportProblem),
+        new("department-variance", "Department Variance", "Custodian, user mismatch, and department change analytics.", ["xlsx", "csv", "pdf"], Icons.Material.Filled.Groups),
+        new("location-changes", "Location Changes", "Building, floor, and location movement changes saved from Asset Explorer.", ["xlsx", "csv", "pdf"], Icons.Material.Filled.LocationOn),
+        new("auditor-productivity", "Auditor Productivity", "Daily saved edit throughput and change-point counts.", ["csv", "xlsx", "pdf"], Icons.Material.Filled.QueryStats),
+        new("asset-aging", "Asset Aging", "Warranty expiry, lifecycle, and refresh planning report.", ["xlsx", "csv", "pdf"], Icons.Material.Filled.EventBusy),
+        new("compliance-report", "Compliance Report", "Audit-ready export of source quality and immutable saved change events.", ["pdf", "xlsx", "csv"], Icons.Material.Filled.VerifiedUser)
+    ];
+
+    private static string ReportUrl(string slug, string format) =>
+        $"/api/reports/{slug}/{format}";
+
+    private static string FormatLabel(string format) =>
+        format.Equals("xlsx", StringComparison.OrdinalIgnoreCase) ? "Excel" : format.ToUpperInvariant();
+
+    private static string FormatIcon(string format) =>
+        format.ToLowerInvariant() switch
+        {
+            "xlsx" => Icons.Material.Filled.TableChart,
+            "csv" => Icons.Material.Filled.Article,
+            "pdf" => Icons.Material.Filled.PictureAsPdf,
+            _ => Icons.Material.Filled.FileDownload
+        };
+
+    private sealed record ReportCard(string Slug, string Name, string Description, string[] Formats, string Icon);
+}

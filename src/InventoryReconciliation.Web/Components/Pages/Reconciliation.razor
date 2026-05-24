@@ -1,0 +1,80 @@
+@page "/reconciliation"
+@inject IUploadedInventorySource UploadedInventorySource
+
+<PageHeader Eyebrow="Reconciliation engine" Title="Asset Variance Matrix" Summary="No reconciliation variances are shown until physical verification findings are submitted.">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.QrCodeScanner" Href="/verification">Start Verification</MudButton>
+</PageHeader>
+
+@if (_snapshot is null)
+{
+    <MudPaper Class="empty-state" Elevation="0">
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        <MudText Typo="Typo.h6">Loading reconciliation context</MudText>
+    </MudPaper>
+}
+else
+{
+    <section class="density-strip">
+        <div class="density-tile">
+            <span>System rows</span>
+            <strong>@_snapshot.TotalRows.ToString("N0")</strong>
+        </div>
+        <div class="density-tile">
+            <span>Physical findings</span>
+            <strong>0</strong>
+        </div>
+        <div class="density-tile">
+            <span>Pending compare</span>
+            <strong>@_snapshot.TotalRows.ToString("N0")</strong>
+        </div>
+        <div class="density-tile">
+            <span>Approved changes</span>
+            <strong>0</strong>
+        </div>
+    </section>
+
+    <MudPaper Class="workspace-panel" Elevation="0">
+        <div class="panel-title-row">
+            <div>
+                <MudText Typo="Typo.h6">Matrix Activation State</MudText>
+                <MudText Typo="Typo.body2" Class="muted">The engine is ready, but no auditor observations have been submitted yet.</MudText>
+            </div>
+            <StatusPill Text="Awaiting verification" Tone="info" />
+        </div>
+        <div class="comparison-grid">
+            <div class="comparison-row neutral">
+                <span class="comparison-field">Exact match</span>
+                <strong>0 cases</strong>
+                <MudIcon Icon="@Icons.Material.Filled.RadioButtonUnchecked" />
+                <strong>Requires physical observation</strong>
+            </div>
+            <div class="comparison-row neutral">
+                <span class="comparison-field">Critical mismatch</span>
+                <strong>0 cases</strong>
+                <MudIcon Icon="@Icons.Material.Filled.RadioButtonUnchecked" />
+                <strong>No submitted variances</strong>
+            </div>
+            <div class="comparison-row neutral">
+                <span class="comparison-field">Missing asset</span>
+                <strong>0 cases</strong>
+                <MudIcon Icon="@Icons.Material.Filled.RadioButtonUnchecked" />
+                <strong>No missing confirmations</strong>
+            </div>
+            <div class="comparison-row neutral">
+                <span class="comparison-field">Unauthorized asset</span>
+                <strong>0 cases</strong>
+                <MudIcon Icon="@Icons.Material.Filled.RadioButtonUnchecked" />
+                <strong>No extra assets captured</strong>
+            </div>
+        </div>
+    </MudPaper>
+}
+
+@code {
+    private UploadedInventorySnapshot? _snapshot;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _snapshot = await UploadedInventorySource.GetSnapshotAsync();
+    }
+}

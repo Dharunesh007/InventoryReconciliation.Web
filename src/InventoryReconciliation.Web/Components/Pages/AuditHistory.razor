@@ -1,0 +1,11 @@
+@page "/audit-history"
+
+<PageHeader Eyebrow="Immutable records" Title="Audit History Timeline" Summary="Audit events will be created when imports, physical verifications, approvals, or attachments are committed.">
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ManageSearch" Href="/assets">View Uploaded Assets</MudButton>
+</PageHeader>
+
+<MudPaper Class="empty-state" Elevation="0">
+    <MudIcon Icon="@Icons.Material.Filled.History" Size="Size.Large" />
+    <MudText Typo="Typo.h5">No audit events yet</MudText>
+    <MudText Typo="Typo.body2">Only the uploaded workbook is loaded. No physical verification changes have been saved in the application database.</MudText>
+</MudPaper>

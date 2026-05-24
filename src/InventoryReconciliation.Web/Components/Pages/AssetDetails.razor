@@ -1,0 +1,107 @@
+@page "/assets/{AssetTag}"
+@inject IUploadedInventorySource UploadedInventorySource
+
+@if (_asset is null)
+{
+    <PageHeader Eyebrow="Uploaded inventory" Title="Asset not found" Summary="@($"No row was found for asset tag {AssetTag}.")">
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ArrowBack" Href="/assets">Back to Explorer</MudButton>
+    </PageHeader>
+}
+else
+{
+    <PageHeader Eyebrow="Uploaded workbook row" Title="@_asset.AssetTag" Summary="@($"Row {_asset.RowNumber} from {_snapshot?.SourceFileName}. No verification or reconciliation records have been created yet.")">
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ArrowBack" Href="/assets">Back to Explorer</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.QrCodeScanner" Href="/verification">Verify Asset</MudButton>
+    </PageHeader>
+
+    <MudGrid>
+        <MudItem xs="12" md="4">
+            <MudPaper Class="workspace-panel asset-card" Elevation="0">
+                <MudIcon Icon="@Icons.Material.Filled.DevicesOther" Size="Size.Large" />
+                <MudText Typo="Typo.h5">@_asset.AssetTag</MudText>
+                <MudText Typo="Typo.body2" Class="muted">@Clean(_asset.Manufacturer, "Unknown manufacturer") - @Clean(_asset.ModelNumber, "Unknown model")</MudText>
+                <StatusPill Text="@Clean(_asset.AssetStatus, "Blank")" Tone="@StatusTone(_asset.AssetStatus)" />
+                <div class="profile-list">
+                    <span>Serial <strong>@Clean(_asset.SerialNumber, "Blank")</strong></span>
+                    <span>Host <strong>@Clean(_asset.HostName, "Blank")</strong></span>
+                    <span>Asset Type <strong>@Clean(_asset.AssetType, "Blank")</strong></span>
+                    <span>Category <strong>@Clean(_asset.AssetCategory, "Blank")</strong></span>
+                </div>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="8">
+            <MudPaper Class="workspace-panel" Elevation="0">
+                <MudText Typo="Typo.h6">Uploaded Details</MudText>
+                <div class="comparison-grid">
+                    @foreach (var row in DetailRows)
+                    {
+                        <div class="comparison-row success">
+                            <span>@row.Field</span>
+                            <strong>@row.Value</strong>
+                            <MudIcon Icon="@Icons.Material.Filled.Check" />
+                            <strong>From upload</strong>
+                        </div>
+                    }
+                </div>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudPaper Class="workspace-panel" Elevation="0">
+        <MudText Typo="Typo.h6">Verification History</MudText>
+        <MudPaper Class="empty-state compact-empty" Elevation="0">
+            <MudIcon Icon="@Icons.Material.Filled.History" Size="Size.Large" />
+            <MudText Typo="Typo.h6">No physical verification history yet</MudText>
+            <MudText Typo="Typo.body2">Only the uploaded master inventory row is available for this asset.</MudText>
+        </MudPaper>
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public string AssetTag { get; set; } = string.Empty;
+
+    private UploadedInventorySnapshot? _snapshot;
+    private UploadedAssetRecord? _asset;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _snapshot = await UploadedInventorySource.GetSnapshotAsync();
+        _asset = _snapshot.Assets.FirstOrDefault(asset =>
+            string.Equals(asset.AssetTag, Uri.UnescapeDataString(AssetTag), StringComparison.OrdinalIgnoreCase));
+    }
+
+    private IEnumerable<DetailRow> DetailRows
+    {
+        get
+        {
+            if (_asset is null)
+            {
+                yield break;
+            }
+
+            yield return new("User", Clean(_asset.UserName, "Blank"));
+            yield return new("Employee ID", Clean(_asset.EmployeeId, "Blank"));
+            yield return new("Department", Clean(_asset.Department, "Blank"));
+            yield return new("Asset Floor", Clean(_asset.AssetFloor, "Blank"));
+            yield return new("Warranty Start", FormatDate(_asset.WarrantyStart));
+            yield return new("Warranty End", FormatDate(_asset.WarrantyEnd));
+            yield return new("PO Number", Clean(_asset.PurchaseOrderNumber, "Blank"));
+            yield return new("Invoice Number", Clean(_asset.InvoiceNumber, "Blank"));
+            yield return new("Windows Patch", Clean(_asset.WindowsPatch, "Blank"));
+            yield return new("Sentinel Status", Clean(_asset.SentinelStatus, "Blank"));
+            yield return new("Remarks", Clean(_asset.Remarks, "Blank"));
+        }
+    }
+
+    private static string Clean(string? value, string fallback) =>
+        string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+
+    private static string FormatDate(DateOnly? date) =>
+        date?.ToString("yyyy-MM-dd") ?? "Blank";
+
+    private static string StatusTone(string? status) =>
+        string.Equals(status, "Active", StringComparison.OrdinalIgnoreCase) ? "success" :
+        string.IsNullOrWhiteSpace(status) ? "neutral" : "warning";
+
+    private sealed record DetailRow(string Field, string Value);
+}

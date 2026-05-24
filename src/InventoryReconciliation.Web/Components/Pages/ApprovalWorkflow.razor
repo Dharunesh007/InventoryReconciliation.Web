@@ -1,0 +1,11 @@
+@page "/approvals"
+
+<PageHeader Eyebrow="Workflow" Title="Approval Workflow" Summary="Approval queues are generated only from submitted physical verification variances.">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.QrCodeScanner" Href="/verification">Start Verification</MudButton>
+</PageHeader>
+
+<MudPaper Class="empty-state" Elevation="0">
+    <MudIcon Icon="@Icons.Material.Filled.Approval" Size="Size.Large" />
+    <MudText Typo="Typo.h5">No approval cases</MudText>
+    <MudText Typo="Typo.body2">There are no submitted reconciliation cases from your uploaded inventory yet.</MudText>
+</MudPaper>

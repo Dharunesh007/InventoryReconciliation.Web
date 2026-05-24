@@ -1,0 +1,3 @@
+AssetTag,SerialNumber,HostName,AssetType,AssetCategory,UserName,EmployeeId,Department,Location,Building,Floor,SeatOrCubicle,AssetStatus,Manufacturer,ModelNumber,PurchaseDate,WarrantyEndDate,StickerNumber,CostCenter,Remarks
+QDA0649,B1XD9R2,AD01,Desktop,C,MADHU KUMAR B C,66,IT,Bidadi Plant,Admin Block,Ground Floor,Commutation Room,Active,DELL,OPTIPLEX 3050,2018-10-16,2023-10-16,QDA0649,CC-IT,Sample imported asset
+QDB0146,HPH5VX3,FIN51,Laptop,A,CHANDRASHEKAR P,255,Finance,Bidadi Plant,Stores,Ground Floor,IS Stores,Active,HP,EliteBook 840,2024-01-10,2027-01-10,QDB0146,CC-FIN,Sample laptop

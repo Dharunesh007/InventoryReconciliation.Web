@@ -1,0 +1,166 @@
+@page "/inventory-upload"
+@inject IUploadedInventorySource UploadedInventorySource
+
+<PageHeader Eyebrow="Master inventory import" Title="Uploaded Workbook Profile" Summary="@HeaderSummary">
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync">Refresh Workbook</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.TableRows" Href="/assets">Open Asset Explorer</MudButton>
+</PageHeader>
+
+@if (_snapshot is null)
+{
+    <MudPaper Class="empty-state" Elevation="0">
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        <MudText Typo="Typo.h6">Loading workbook profile</MudText>
+    </MudPaper>
+}
+else
+{
+    <MudGrid>
+        <MudItem xs="12" lg="4">
+            <MudPaper Class="workspace-panel upload-zone" Elevation="0">
+                <MudIcon Icon="@Icons.Material.Filled.UploadFile" Size="Size.Large" />
+                <MudText Typo="Typo.h6">@_snapshot.SourceFileName</MudText>
+                <MudText Typo="Typo.body2" Class="muted">@_snapshot.SourcePath</MudText>
+                <StatusPill Text="@($"{_snapshot.TotalRows:N0} rows loaded")" Tone="info" />
+            </MudPaper>
+            <MudPaper Class="workspace-panel" Elevation="0">
+                <MudText Typo="Typo.h6">Workbook profile</MudText>
+                <div class="profile-list">
+                    <span>Rows detected <strong>@_snapshot.TotalRows.ToString("N0")</strong></span>
+                    <span>Columns detected <strong>@_snapshot.TotalColumns.ToString("N0")</strong></span>
+                    <span>Duplicate asset tags <strong>@_snapshot.DuplicateAssetTags.Count.ToString("N0")</strong></span>
+                    <span>Formula error cells <strong>@_snapshot.FormulaErrorCells.ToString("N0")</strong></span>
+                </div>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" lg="8">
+            <MudPaper Class="workspace-panel" Elevation="0">
+                <div class="panel-title-row">
+                    <div>
+                        <MudText Typo="Typo.h6">Detected Columns</MudText>
+                        <MudText Typo="Typo.body2" Class="muted">Profiled directly from your uploaded workbook.</MudText>
+                    </div>
+                    <MudChip T="string" Color="Color.Success" Variant="Variant.Outlined" Size="Size.Small">@MappedColumnCount mapped fields</MudChip>
+                </div>
+                <MudTable Items="ColumnRows" Dense="true" Hover="true" Class="enterprise-table">
+                    <HeaderContent>
+                        <MudTh>Source column</MudTh>
+                        <MudTh>Suggested target</MudTh>
+                        <MudTh>Quality</MudTh>
+                        <MudTh>Sample</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Source">@context.Source</MudTd>
+                        <MudTd DataLabel="Target">@context.Target</MudTd>
+                        <MudTd DataLabel="Quality"><StatusPill Text="@context.Quality" Tone="@context.Tone" /></MudTd>
+                        <MudTd DataLabel="Sample">@context.Sample</MudTd>
+                    </RowTemplate>
+                    <PagerContent>
+                        <MudTablePager PageSizeOptions="new[] { 10, 25, 50 }" />
+                    </PagerContent>
+                </MudTable>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudPaper Class="workspace-panel" Elevation="0">
+        <MudText Typo="Typo.h6">Upload Guardrails From This Workbook</MudText>
+        <div class="guardrail-grid">
+            @foreach (var issue in Issues)
+            {
+                <div class="guardrail-card">
+                    <MudIcon Icon="@issue.Icon" Color="@issue.Color" />
+                    <div>
+                        <strong>@issue.Title</strong>
+                        <span>@issue.Detail</span>
+                    </div>
+                </div>
+            }
+        </div>
+    </MudPaper>
+}
+
+@code {
+    private UploadedInventorySnapshot? _snapshot;
+
+    private string HeaderSummary => _snapshot is null
+        ? "Loading the workbook you uploaded."
+        : $"Source: {_snapshot.SourceFileName} - last modified {_snapshot.SourceLastModified?.ToLocalTime():yyyy-MM-dd HH:mm}.";
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _snapshot = await UploadedInventorySource.GetSnapshotAsync();
+    }
+
+    private int MappedColumnCount => ColumnRows.Count(row => row.Target != "Custom / unmapped");
+
+    private IEnumerable<MappingRow> ColumnRows =>
+        _snapshot?.Columns.Select(column =>
+        {
+            var target = SuggestedTarget(column.Header);
+            var quality = column.ErrorCount > 0 ? "Formula errors" : column.NonBlankCount == 0 ? "Blank" : "Healthy";
+            var tone = column.ErrorCount > 0 ? "warning" : column.NonBlankCount == 0 ? "neutral" : "success";
+            return new MappingRow(column.Header, target, quality, tone, string.Join(", ", column.Samples.Take(3)));
+        }) ?? [];
+
+    private IEnumerable<Issue> Issues
+    {
+        get
+        {
+            var snapshot = _snapshot!;
+            if (snapshot.DuplicateAssetTags.Count > 0)
+            {
+                yield return new("Duplicate asset tag", string.Join(", ", snapshot.DuplicateAssetTags.Select(item => $"{item.Value} ({item.Count})")), Icons.Material.Filled.ContentCopy, Color.Error);
+            }
+
+            if (snapshot.DuplicateSerialNumbers.Count > 0)
+            {
+                yield return new("Duplicate serial", string.Join(", ", snapshot.DuplicateSerialNumbers.Take(5).Select(item => $"{item.Value} ({item.Count})")), Icons.Material.Filled.Fingerprint, Color.Warning);
+            }
+
+            if (snapshot.FormulaErrorCells > 0)
+            {
+                yield return new("Formula errors", $"{snapshot.FormulaErrorCells:N0} workbook cells contain error values and are treated as source quality issues.", Icons.Material.Filled.Functions, Color.Warning);
+            }
+
+            yield return new("Snapshot policy", "No placeholder records are generated. The UI is reading only this configured uploaded workbook.", Icons.Material.Filled.LockClock, Color.Success);
+        }
+    }
+
+    private static string SuggestedTarget(string header)
+    {
+        var normalized = Normalize(header);
+        return normalized switch
+        {
+            "ASSETTAG" => "AssetTag",
+            "SERIALNUMBER" => "SerialNumber",
+            "HOSTNAME" => "HostName",
+            "USERNAMEDONTREFER" => "UserName",
+            "EMPID" => "EmployeeId",
+            "DEPARTMENT" => "Department",
+            "ASSETFLOOR" => "Location",
+            "ASSETTYPE" => "AssetType",
+            "CAT" => "AssetCategory",
+            "MANUFACTURER" => "Manufacturer",
+            "MODELNUMBER" => "ModelNumber",
+            "WARRANTYSTART" => "WarrantyStartDate",
+            "WARRANTYEND" => "WarrantyEndDate",
+            "PONUMBER" => "PurchaseOrderNumber",
+            "PODATE" => "PurchaseOrderDate",
+            "INVOICENO" => "InvoiceNumber",
+            "INVOICEDATE" => "InvoiceDate",
+            "REMARKS" => "Remarks",
+            "WINDOWSPATCH" => "WindowsPatch",
+            "SENTINELSTATUS" => "SentinelStatus",
+            _ => "Custom / unmapped"
+        };
+    }
+
+    private static string Normalize(string value) =>
+        new(value.Trim().ToUpperInvariant().Where(char.IsLetterOrDigit).ToArray());
+
+    private sealed record MappingRow(string Source, string Target, string Quality, string Tone, string Sample);
+    private sealed record Issue(string Title, string Detail, string Icon, Color Color);
+}

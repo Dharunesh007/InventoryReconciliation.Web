@@ -1,0 +1,42 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InventoryReconciliation.Domain", "src\InventoryReconciliation.Domain\InventoryReconciliation.Domain.csproj", "{4C318A74-3A66-4734-9109-C69B0C1BB2B8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InventoryReconciliation.Application", "src\InventoryReconciliation.Application\InventoryReconciliation.Application.csproj", "{7CF143F7-D4DE-43B3-B544-E7A6F09D6D8C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InventoryReconciliation.Infrastructure", "src\InventoryReconciliation.Infrastructure\InventoryReconciliation.Infrastructure.csproj", "{952596F5-9C7C-4B1C-98EE-0A13451E46D4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InventoryReconciliation.Web", "src\InventoryReconciliation.Web\InventoryReconciliation.Web.csproj", "{A9B8832F-DAA1-4602-9D5F-3B8650C1D277C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InventoryReconciliation.Tests", "tests\InventoryReconciliation.Tests\InventoryReconciliation.Tests.csproj", "{F4029C10-B88B-42C6-B729-FCA19C07E6C2}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{4C318A74-3A66-4734-9109-C69B0C1BB2B8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4C318A74-3A66-4734-9109-C69B0C1BB2B8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4C318A74-3A66-4734-9109-C69B0C1BB2B8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4C318A74-3A66-4734-9109-C69B0C1BB2B8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7CF143F7-D4DE-43B3-B544-E7A6F09D6D8C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7CF143F7-D4DE-43B3-B544-E7A6F09D6D8C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7CF143F7-D4DE-43B3-B544-E7A6F09D6D8C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7CF143F7-D4DE-43B3-B544-E7A6F09D6D8C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{952596F5-9C7C-4B1C-98EE-0A13451E46D4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{952596F5-9C7C-4B1C-98EE-0A13451E46D4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{952596F5-9C7C-4B1C-98EE-0A13451E46D4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{952596F5-9C7C-4B1C-98EE-0A13451E46D4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A9B8832F-DAA1-4602-9D5F-3B8650C1D277C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A9B8832F-DAA1-4602-9D5F-3B8650C1D277C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A9B8832F-DAA1-4602-9D5F-3B8650C1D277C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A9B8832F-DAA1-4602-9D5F-3B8650C1D277C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F4029C10-B88B-42C6-B729-FCA19C07E6C2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F4029C10-B88B-42C6-B729-FCA19C07E6C2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F4029C10-B88B-42C6-B729-FCA19C07E6C2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F4029C10-B88B-42C6-B729-FCA19C07E6C2}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

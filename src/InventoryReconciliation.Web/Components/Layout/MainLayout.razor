@@ -1,0 +1,144 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Navigation
+
+<MudThemeProvider Theme="@_theme" IsDarkMode="true" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<div class="enterprise-shell @(_navCollapsed ? "is-nav-collapsed" : null)">
+    <aside class="command-rail">
+        <div class="rail-brand">
+            <span class="brand-mark">IR</span>
+            <div class="brand-copy">
+                <strong>ReconIQ</strong>
+                <span>Audit Intelligence</span>
+            </div>
+            <MudIconButton Icon="@Icons.Material.Filled.KeyboardDoubleArrowLeft"
+                           Class="rail-collapse"
+                           Color="Color.Inherit"
+                           Size="Size.Small"
+                           OnClick="ToggleNav" />
+        </div>
+
+        <NavMenu IsCollapsed="_navCollapsed" />
+    </aside>
+
+    <div class="command-main">
+        <header class="command-topbar">
+            <div class="topbar-left">
+                <MudIconButton Icon="@Icons.Material.Filled.MenuOpen"
+                               Class="mobile-nav-trigger"
+                               Color="Color.Inherit"
+                               OnClick="ToggleNav" />
+                <div class="breadcrumb-stack">
+                    <span>Inventory Verification</span>
+                    <strong>@CurrentWorkspace</strong>
+                </div>
+            </div>
+            <div class="global-search">
+                <MudIcon Icon="@Icons.Material.Filled.Search" />
+                <input placeholder="Search asset, serial, user, department or workflow" />
+                <kbd>Ctrl K</kbd>
+            </div>
+            <div class="topbar-actions">
+                <MudChip T="string" Class="sync-chip" Icon="@Icons.Material.Filled.CloudDone" Size="Size.Small">Workbook synced</MudChip>
+                <MudButton Variant="Variant.Outlined"
+                           Class="ai-button"
+                           StartIcon="@Icons.Material.Filled.AutoAwesome"
+                           Href="/verification">
+                    AI Assist
+                </MudButton>
+                <MudIconButton Icon="@Icons.Material.Filled.FilterAlt" Class="topbar-icon" />
+                <MudIconButton Icon="@Icons.Material.Filled.NotificationsActive" Class="topbar-icon" Href="/notifications" />
+                <div class="workspace-avatar">
+                    <MudAvatar Class="user-avatar">AL</MudAvatar>
+                    <div>
+                        <strong>Audit Lead</strong>
+                        <span>Verification Team</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="main-content">
+            @Body
+        </main>
+    </div>
+</div>
+
+@code {
+    private bool _navCollapsed;
+
+    private readonly MudTheme _theme = new()
+    {
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#3B63F3",
+            Secondary = "#0F9F8E",
+            Tertiary = "#F59E0B",
+            Background = "#EEF3F8",
+            Surface = "#FFFFFF",
+            AppbarBackground = "#FFFFFF",
+            DrawerBackground = "#121825",
+            TextPrimary = "#111827",
+            TextSecondary = "#5E6A7D",
+            Divider = "#D9E2EF",
+            Error = "#E5484D",
+            Warning = "#D97706",
+            Success = "#0E9F6E",
+            Info = "#2563EB"
+        },
+        PaletteDark = new PaletteDark
+        {
+            Primary = "#8AA8FF",
+            Secondary = "#35D0BA",
+            Tertiary = "#FBBF24",
+            Background = "#080B12",
+            Surface = "#101522",
+            AppbarBackground = "#101522",
+            DrawerBackground = "#080B12",
+            TextPrimary = "#F8FAFC",
+            TextSecondary = "#AEB8C9",
+            Divider = "#243044",
+            Error = "#FF6B70",
+            Warning = "#F7B955",
+            Success = "#44D7A8",
+            Info = "#8AA8FF"
+        },
+        LayoutProperties = new LayoutProperties
+        {
+            DrawerWidthLeft = "286px",
+            AppbarHeight = "74px"
+        }
+    };
+
+    private string CurrentWorkspace
+    {
+        get
+        {
+            var path = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
+            return path switch
+            {
+                "" => "Executive Command Dashboard",
+                "inventory-upload" => "Inventory Upload",
+                "assets" => "Asset Explorer",
+                var value when value.StartsWith("assets/", StringComparison.OrdinalIgnoreCase) => "Asset Details",
+                "verification" => "Verification Workspace",
+                "mobile-verification" => "Mobile Field Mode",
+                "reconciliation" => "Reconciliation Matrix",
+                "audit-history" => "Audit Timeline",
+                "bulk-update" => "Bulk Update Center",
+                "approvals" => "Approval Workflow",
+                "variance-analytics" => "Variance Analytics",
+                "reports" => "Reports Center",
+                "notifications" => "Notification Center",
+                "roles" => "Role Management",
+                "admin-settings" => "Admin Settings",
+                _ => "Command Center"
+            };
+        }
+    }
+
+    private void ToggleNav() => _navCollapsed = !_navCollapsed;
+}

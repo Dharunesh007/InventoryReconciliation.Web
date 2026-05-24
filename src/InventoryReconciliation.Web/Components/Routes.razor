@@ -1,0 +1,21 @@
+<CascadingAuthenticationState>
+    <Router AppAssembly="@typeof(Program).Assembly">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+                <NotAuthorized>
+                    <RedirectToLogin />
+                </NotAuthorized>
+            </AuthorizeRouteView>
+            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+        </Found>
+        <NotFound>
+            <LayoutView Layout="@typeof(MainLayout)">
+                <MudPaper Class="empty-state" Elevation="0">
+                    <MudIcon Icon="@Icons.Material.Filled.TravelExplore" Size="Size.Large" />
+                    <MudText Typo="Typo.h5">Page not found</MudText>
+                    <MudText Typo="Typo.body2">The requested workspace is not available.</MudText>
+                </MudPaper>
+            </LayoutView>
+        </NotFound>
+    </Router>
+</CascadingAuthenticationState>

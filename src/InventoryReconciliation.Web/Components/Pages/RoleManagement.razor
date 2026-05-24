@@ -1,0 +1,31 @@
+@page "/roles"
+
+<PageHeader Eyebrow="Identity and access" Title="Role Management" Summary="Map Azure Entra ID groups to granular permissions for import, verification, approval, reporting, and administration.">
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Sync">Sync Entra Groups</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd">Assign Role</MudButton>
+</PageHeader>
+
+<MudPaper Class="workspace-panel" Elevation="0">
+    <MudTable Items="Roles" Dense="true" Hover="true" Class="enterprise-table">
+        <HeaderContent><MudTh>Role</MudTh><MudTh>Users</MudTh><MudTh>Core permissions</MudTh><MudTh>Risk</MudTh></HeaderContent>
+        <RowTemplate>
+            <MudTd><strong>@context.Name</strong><span class="cell-sub">@context.Group</span></MudTd>
+            <MudTd>@context.Users</MudTd>
+            <MudTd>@context.Permissions</MudTd>
+            <MudTd><StatusPill Text="@context.Risk" Tone="@context.Tone" /></MudTd>
+        </RowTemplate>
+    </MudTable>
+</MudPaper>
+
+@code {
+    private readonly RoleRow[] Roles =
+    [
+        new("Super Admin", "entra-it-asset-super-admin", 4, "All platform, workflow, and security settings", "Privileged", "critical"),
+        new("Inventory Admin", "entra-it-asset-inventory-admin", 12, "Import, snapshot, approve master-data changes", "Elevated", "warning"),
+        new("Auditor", "entra-it-asset-auditors", 86, "Scan, verify, attach evidence, submit variances", "Standard", "success"),
+        new("Regional Manager", "entra-it-asset-regional-managers", 18, "Approve location and ownership changes", "Approval", "info"),
+        new("Read-Only Executive", "entra-it-asset-executives", 9, "Dashboard, Power BI, compliance reports", "Read only", "success")
+    ];
+
+    private sealed record RoleRow(string Name, string Group, int Users, string Permissions, string Risk, string Tone);
+}

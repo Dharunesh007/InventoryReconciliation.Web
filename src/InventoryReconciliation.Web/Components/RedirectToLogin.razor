@@ -1,0 +1,13 @@
+@inject NavigationManager Navigation
+
+<MudPaper Class="empty-state" Elevation="0">
+    <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+    <MudText Typo="Typo.h6">Redirecting to secure sign-in</MudText>
+</MudPaper>
+
+@code {
+    protected override void OnInitialized()
+    {
+        Navigation.NavigateTo("/login", forceLoad: true);
+    }
+}

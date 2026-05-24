@@ -1,0 +1,11 @@
+@page "/bulk-update"
+
+<PageHeader Eyebrow="Controlled remediation" Title="Bulk Update Center" Summary="Bulk updates are disabled until uploaded assets have approved reconciliation variances.">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.QrCodeScanner" Href="/verification">Capture Verification</MudButton>
+</PageHeader>
+
+<MudPaper Class="empty-state" Elevation="0">
+    <MudIcon Icon="@Icons.Material.Filled.RuleFolder" Size="Size.Large" />
+    <MudText Typo="Typo.h5">No approved changes available</MudText>
+    <MudText Typo="Typo.body2">This page will stay empty until real physical verification findings are approved.</MudText>
+</MudPaper>

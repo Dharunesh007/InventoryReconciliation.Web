@@ -1,0 +1,31 @@
+services:
+  sql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Change_this_password_123!"
+    ports:
+      - "14333:1433"
+    volumes:
+      - sql-data:/var/opt/mssql
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  web:
+    build: .
+    depends_on:
+      - sql
+      - redis
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      Authentication__EnableEntraId: "false"
+      ConnectionStrings__InventoryDb: "Server=sql,1433;Database=InventoryReconciliation;User Id=sa;Password=Change_this_password_123!;TrustServerCertificate=True;MultipleActiveResultSets=true"
+      ConnectionStrings__Redis: "redis:6379"
+    ports:
+      - "8080:8080"
+
+volumes:
+  sql-data:

@@ -1,0 +1,55 @@
+<MudNavMenu Class="@($"nav-menu {(IsCollapsed ? "nav-menu-collapsed" : string.Empty)}")">
+    <div class="workspace-card">
+        <span class="workspace-signal"></span>
+        <div>
+            <strong>Global IT Audit</strong>
+            <span>Production workspace</span>
+        </div>
+        <MudIcon Icon="@Icons.Material.Filled.UnfoldMore" />
+    </div>
+
+    <div class="nav-search">
+        <MudIcon Icon="@Icons.Material.Filled.Search" />
+        <input placeholder="Find module" />
+    </div>
+
+    <div class="quick-action-strip">
+        <MudIconButton Icon="@Icons.Material.Filled.QrCodeScanner" Href="/verification" Size="Size.Small" />
+        <MudIconButton Icon="@Icons.Material.Filled.UploadFile" Href="/inventory-upload" Size="Size.Small" />
+        <MudIconButton Icon="@Icons.Material.Filled.FileDownload" Href="/reports" Size="Size.Small" />
+    </div>
+
+    <div class="nav-section-label">Command</div>
+    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.SpaceDashboard">Executive Dashboard</MudNavLink>
+    <MudNavLink Href="/inventory-upload" Icon="@Icons.Material.Filled.DriveFolderUpload">Inventory Upload</MudNavLink>
+    <MudNavLink Href="/assets" Icon="@Icons.Material.Filled.ManageSearch">Asset Explorer</MudNavLink>
+
+    <div class="nav-section-label">Verify</div>
+    <MudNavLink Href="/verification" Icon="@Icons.Material.Filled.QrCodeScanner">Verification Workspace</MudNavLink>
+    <MudNavLink Href="/mobile-verification" Icon="@Icons.Material.Filled.PhoneIphone">Mobile Field Mode</MudNavLink>
+    <MudNavLink Href="/reconciliation" Icon="@Icons.Material.Filled.CompareArrows">Variance Matrix</MudNavLink>
+    <MudNavLink Href="/audit-history" Icon="@Icons.Material.Filled.History">Audit Timeline</MudNavLink>
+
+    <div class="nav-section-label">Resolve</div>
+    <MudNavLink Href="/bulk-update" Icon="@Icons.Material.Filled.RuleFolder">Bulk Update</MudNavLink>
+    <MudNavLink Href="/approvals" Icon="@Icons.Material.Filled.Approval">Approval Workflow</MudNavLink>
+    <MudNavLink Href="/notifications" Icon="@Icons.Material.Filled.NotificationsActive">Notifications</MudNavLink>
+
+    <div class="nav-section-label">Intelligence</div>
+    <MudNavLink Href="/variance-analytics" Icon="@Icons.Material.Filled.QueryStats">Variance Analytics</MudNavLink>
+    <MudNavLink Href="/reports" Icon="@Icons.Material.Filled.Assessment">Reports Center</MudNavLink>
+
+    <div class="nav-section-label">Governance</div>
+    <MudNavLink Href="/roles" Icon="@Icons.Material.Filled.AdminPanelSettings">Role Management</MudNavLink>
+    <MudNavLink Href="/admin-settings" Icon="@Icons.Material.Filled.Tune">Admin Settings</MudNavLink>
+
+    <div class="recent-card">
+        <span>Recent</span>
+        <strong>Uploaded workbook</strong>
+        <small>Ready for verification</small>
+    </div>
+</MudNavMenu>
+
+@code {
+    [Parameter] public bool IsCollapsed { get; set; }
+}

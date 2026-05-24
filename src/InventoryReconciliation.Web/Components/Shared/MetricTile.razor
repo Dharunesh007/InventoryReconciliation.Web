@@ -1,0 +1,29 @@
+<MudPaper Class="@($"metric-tile metric-{Tone}")" Style="@($"--accent:{Accent}; --metric-progress:{Progress}")" Elevation="0">
+    <span class="metric-aura"></span>
+    <div class="metric-icon">
+        <MudIcon Icon="@Icon" />
+    </div>
+    <div class="metric-body">
+        <MudText Typo="Typo.caption" Class="metric-label">@Label</MudText>
+        <MudText Typo="Typo.h4" Class="metric-value">@Value</MudText>
+        <div class="metric-footer">
+            <MudText Typo="Typo.caption" Class="metric-delta">@Delta</MudText>
+            @if (!string.IsNullOrWhiteSpace(Trend))
+            {
+                <span class="metric-trend">@Trend</span>
+            }
+        </div>
+        <span class="metric-progress"></span>
+    </div>
+</MudPaper>
+
+@code {
+    [Parameter] public string Label { get; set; } = string.Empty;
+    [Parameter] public string Value { get; set; } = string.Empty;
+    [Parameter] public string Delta { get; set; } = string.Empty;
+    [Parameter] public string Accent { get; set; } = "#2357D9";
+    [Parameter] public string Icon { get; set; } = Icons.Material.Filled.Insights;
+    [Parameter] public string Trend { get; set; } = string.Empty;
+    [Parameter] public string Tone { get; set; } = "neutral";
+    [Parameter] public int Progress { get; set; } = 0;
+}

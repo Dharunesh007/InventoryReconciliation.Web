@@ -1,0 +1,443 @@
+@page "/mobile-verification"
+@using Microsoft.JSInterop
+@inject IUploadedInventorySource UploadedInventorySource
+@inject Microsoft.JSInterop.IJSRuntime JS
+@inject ISnackbar Snackbar
+@implements IAsyncDisposable
+
+<PageHeader Eyebrow="PWA field mode" Title="Mobile Verification" Summary="Compact verification flow using assets from your uploaded workbook only.">
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync">Refresh Workbook</MudButton>
+</PageHeader>
+
+@if (_asset is null)
+{
+    <MudPaper Class="empty-state" Elevation="0">
+        <MudIcon Icon="@Icons.Material.Filled.UploadFile" Size="Size.Large" />
+        <MudText Typo="Typo.h5">No uploaded asset available</MudText>
+    </MudPaper>
+}
+else
+{
+    <div class="mobile-shell">
+        <section class="phone-frame">
+            <div class="phone-status"><span>@DateTime.Now.ToString("HH:mm")</span><span>Upload loaded</span></div>
+            <div class="@($"phone-scan {(_isBarcodeScanning ? "is-scanning" : string.Empty)}")">
+                <video id="@MobileScannerVideoId" class="phone-scan-video" muted playsinline></video>
+                @if (!_isBarcodeScanning)
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.QrCodeScanner" Size="Size.Large" />
+                    <strong>Scan asset tag</strong>
+                }
+                <span class="phone-scan-status">@_barcodeScannerMessage</span>
+            </div>
+            <div class="mobile-actions">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.QrCodeScanner"
+                           Disabled="_isBarcodeScanning"
+                           OnClick="StartBarcodeScannerAsync">
+                    Scan
+                </MudButton>
+                <MudButton Variant="Variant.Outlined"
+                           StartIcon="@Icons.Material.Filled.StopCircle"
+                           Disabled="@(!_isBarcodeScanning)"
+                           OnClick="StopBarcodeScannerAsync">
+                    Stop
+                </MudButton>
+            </div>
+            <MudTextField T="string" Label="Asset tag" Value="@_asset.AssetTag" Margin="Margin.Dense" />
+            <MudTextField T="string" Label="System user" Value="@Clean(_asset.UserName, "Blank")" Margin="Margin.Dense" />
+            <MudTextField T="string" Label="System location" Value="@Clean(_asset.AssetFloor, "Blank")" Margin="Margin.Dense" />
+            <MudSelect T="string" Label="Physical condition" @bind-Value="_condition" Dense="true">
+                <MudSelectItem Value="@_conditionGood">Good</MudSelectItem>
+                <MudSelectItem Value="@_conditionDamaged">Damaged</MudSelectItem>
+                <MudSelectItem Value="@_conditionMissing">Missing</MudSelectItem>
+            </MudSelect>
+            <div class="mobile-actions">
+                <label class="mobile-capture-button" for="field-photo-capture">
+                    <MudIcon Icon="@Icons.Material.Filled.PhotoCamera" Size="Size.Small" />
+                    <span>Photo</span>
+                </label>
+                <InputFile id="field-photo-capture"
+                           OnChange="CapturePhotoAsync"
+                           accept="image/*"
+                           capture="environment"
+                           style="position:fixed;left:-10000px;top:0;width:1px;height:1px;opacity:0;pointer-events:none;"
+                           class="mobile-file-input" />
+                <MudButton Variant="@(_isRecordingVoice ? Variant.Filled : Variant.Outlined)"
+                           Color="@(_isRecordingVoice ? Color.Error : Color.Default)"
+                           StartIcon="@(_isRecordingVoice ? Icons.Material.Filled.StopCircle : Icons.Material.Filled.Mic)"
+                           OnClick="ToggleVoiceRecordingAsync">
+                    @(_isRecordingVoice ? "Stop" : "Voice")
+                </MudButton>
+            </div>
+
+            @if (_photoDataUrl is not null || _voiceDataUrl is not null)
+            {
+                <div class="evidence-preview-grid">
+                    @if (_photoDataUrl is not null)
+                    {
+                        <div class="evidence-preview-card">
+                            <img src="@_photoDataUrl" alt="Captured asset evidence" />
+                            <div>
+                                <strong>Photo attached</strong>
+                                <span>@_photoName - @FormatBytes(_photoSizeBytes)</span>
+                            </div>
+                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="ClearPhoto" />
+                        </div>
+                    }
+                    @if (_voiceDataUrl is not null)
+                    {
+                        <div class="evidence-preview-card">
+                            <span class="voice-evidence-icon"><MudIcon Icon="@Icons.Material.Filled.GraphicEq" /></span>
+                            <div>
+                                <strong>Voice note attached</strong>
+                                <span>@_voiceDurationSeconds sec - @FormatBytes(_voiceSizeBytes)</span>
+                                <audio controls src="@_voiceDataUrl"></audio>
+                            </div>
+                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="ClearVoice" />
+                        </div>
+                    }
+                </div>
+            }
+
+            <MudTextField T="string" Label="Field remarks" @bind-Value="_remarks" Margin="Margin.Dense" Lines="2" />
+            <MudButton FullWidth="true"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.CloudDone"
+                       OnClick="SaveVerification">
+                Save Verification
+            </MudButton>
+        </section>
+        <section class="workspace-panel mobile-copy">
+            <MudText Typo="Typo.h6">Current Upload Context</MudText>
+            <div class="profile-list">
+                <span>Source asset <strong>@_asset.AssetTag</strong></span>
+                <span>Serial <strong>@Clean(_asset.SerialNumber, "Blank")</strong></span>
+                <span>Department <strong>@Clean(_asset.Department, "Blank")</strong></span>
+                <span>Status <strong>@Clean(_asset.AssetStatus, "Blank")</strong></span>
+                <span>Photo evidence <strong>@(_photoDataUrl is null ? "Not captured" : "Captured")</strong></span>
+                <span>Voice note <strong>@(_voiceDataUrl is null ? "Not recorded" : "Recorded")</strong></span>
+            </div>
+            @if (_lastSavedMessage is not null)
+            {
+                <div class="mobile-save-summary">
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" />
+                    <span>@_lastSavedMessage</span>
+                </div>
+            }
+        </section>
+    </div>
+}
+
+@code {
+    private const string MobileScannerVideoId = "mobileVerificationScannerVideo";
+    private const long MaxPhotoBytes = 8 * 1024 * 1024;
+
+    private UploadedInventorySnapshot? _snapshot;
+    private UploadedAssetRecord? _asset;
+    private DotNetObjectReference<MobileVerification>? _barcodeScannerReference;
+    private string _condition = "Good";
+    private readonly string _conditionGood = "Good";
+    private readonly string _conditionDamaged = "Damaged";
+    private readonly string _conditionMissing = "Missing";
+    private string? _photoDataUrl;
+    private string? _photoName;
+    private long _photoSizeBytes;
+    private string? _voiceDataUrl;
+    private string? _voiceMimeType;
+    private long _voiceSizeBytes;
+    private int _voiceDurationSeconds;
+    private bool _isRecordingVoice;
+    private bool _isBarcodeScanning;
+    private string _remarks = string.Empty;
+    private string _barcodeScannerMessage = "Ready to scan uploaded asset tag or serial.";
+    private string? _lastSavedMessage;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _snapshot = await UploadedInventorySource.GetSnapshotAsync();
+        _asset = _snapshot.Assets.FirstOrDefault();
+    }
+
+    private async Task StartBarcodeScannerAsync()
+    {
+        try
+        {
+            _barcodeScannerReference ??= DotNetObjectReference.Create(this);
+            _barcodeScannerMessage = "Starting camera...";
+            await JS.InvokeVoidAsync("reconIqBarcodeScanner.start", MobileScannerVideoId, _barcodeScannerReference, nameof(OnBarcodeDetected));
+            _isBarcodeScanning = true;
+            _barcodeScannerMessage = "Scanning... center the asset barcode.";
+        }
+        catch (Exception exception)
+        {
+            _isBarcodeScanning = false;
+            _barcodeScannerMessage = "Camera scanner unavailable.";
+            Snackbar.Add($"Barcode scanner is not available: {exception.Message}", Severity.Error);
+        }
+    }
+
+    private async Task StopBarcodeScannerAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("reconIqBarcodeScanner.stop", MobileScannerVideoId);
+        }
+        catch
+        {
+            // Browser JS may already have released the camera stream.
+        }
+
+        _isBarcodeScanning = false;
+        _barcodeScannerMessage = "Scanner stopped.";
+    }
+
+    [JSInvokable]
+    public Task OnBarcodeDetected(string scannedValue)
+    {
+        _isBarcodeScanning = false;
+
+        var matchedAsset = FindScannedAsset(scannedValue);
+        if (matchedAsset is null)
+        {
+            _barcodeScannerMessage = $"Scanned {scannedValue.Trim()}, but no uploaded asset matched.";
+            Snackbar.Add("Scanned value was not found in the uploaded workbook.", Severity.Warning);
+            StateHasChanged();
+            return Task.CompletedTask;
+        }
+
+        _asset = matchedAsset;
+        _barcodeScannerMessage = $"Scanned and selected {matchedAsset.AssetTag}.";
+        Snackbar.Add($"Asset {matchedAsset.AssetTag} selected from scan.", Severity.Success);
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private async Task CapturePhotoAsync(InputFileChangeEventArgs args)
+    {
+        var file = args.File;
+        if (file is null)
+        {
+            return;
+        }
+
+        if (!file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            Snackbar.Add("Please capture or select an image file.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            await using var stream = file.OpenReadStream(MaxPhotoBytes);
+            using var memory = new MemoryStream();
+            await stream.CopyToAsync(memory);
+
+            _photoName = file.Name;
+            _photoSizeBytes = file.Size;
+            _photoDataUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(memory.ToArray())}";
+            Snackbar.Add("Photo evidence attached.", Severity.Success);
+        }
+        catch (IOException)
+        {
+            Snackbar.Add("Photo is too large. Capture a smaller image under 8 MB.", Severity.Error);
+        }
+    }
+
+    private async Task ToggleVoiceRecordingAsync()
+    {
+        if (_isRecordingVoice)
+        {
+            await StopVoiceRecordingAsync();
+            return;
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("reconIqMobileEvidence.startVoiceRecording");
+            _isRecordingVoice = true;
+            Snackbar.Add("Recording voice note. Tap Stop when finished.", Severity.Info);
+        }
+        catch (Exception exception)
+        {
+            _isRecordingVoice = false;
+            Snackbar.Add($"Microphone is not available: {exception.Message}", Severity.Error);
+        }
+    }
+
+    private async Task StopVoiceRecordingAsync()
+    {
+        try
+        {
+            var result = await JS.InvokeAsync<VoiceCaptureResult?>("reconIqMobileEvidence.stopVoiceRecording");
+            _isRecordingVoice = false;
+
+            if (result?.DataUrl is null)
+            {
+                Snackbar.Add("No voice note was recorded.", Severity.Warning);
+                return;
+            }
+
+            _voiceDataUrl = result.DataUrl;
+            _voiceMimeType = result.MimeType;
+            _voiceSizeBytes = result.Size;
+            _voiceDurationSeconds = result.DurationSeconds;
+            Snackbar.Add("Voice note attached.", Severity.Success);
+        }
+        catch (Exception exception)
+        {
+            _isRecordingVoice = false;
+            Snackbar.Add($"Could not save voice note: {exception.Message}", Severity.Error);
+        }
+    }
+
+    private void SaveVerification()
+    {
+        if (_asset is null)
+        {
+            return;
+        }
+
+        var evidence = new List<string>();
+        if (_photoDataUrl is not null)
+        {
+            evidence.Add("photo");
+        }
+
+        if (_voiceDataUrl is not null)
+        {
+            evidence.Add("voice note");
+        }
+
+        _lastSavedMessage = $"Verification captured for {_asset.AssetTag} with condition {_condition} and {(evidence.Count == 0 ? "no evidence" : string.Join(" + ", evidence))}.";
+        Snackbar.Add(_lastSavedMessage, Severity.Success);
+    }
+
+    private void ClearPhoto()
+    {
+        _photoDataUrl = null;
+        _photoName = null;
+        _photoSizeBytes = 0;
+    }
+
+    private void ClearVoice()
+    {
+        _voiceDataUrl = null;
+        _voiceMimeType = null;
+        _voiceSizeBytes = 0;
+        _voiceDurationSeconds = 0;
+    }
+
+    private static string Clean(string? value, string fallback) =>
+        string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+
+    private UploadedAssetRecord? FindScannedAsset(string scannedValue)
+    {
+        var token = ExtractScannedToken(scannedValue);
+        var normalized = NormalizeLookup(token);
+
+        return _snapshot?.Assets.FirstOrDefault(asset =>
+            NormalizeLookup(asset.AssetTag) == normalized ||
+            NormalizeLookup(asset.SerialNumber) == normalized ||
+            string.Equals(asset.AssetTag, token, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(asset.SerialNumber, token, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string ExtractScannedToken(string scannedValue)
+    {
+        var text = Clean(scannedValue, string.Empty);
+        if (Uri.TryCreate(text, UriKind.Absolute, out var uri))
+        {
+            var query = uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var pair in query)
+            {
+                var parts = pair.Split('=', 2);
+                if (parts.Length == 2 &&
+                    (parts[0].Equals("asset", StringComparison.OrdinalIgnoreCase) ||
+                     parts[0].Equals("assetTag", StringComparison.OrdinalIgnoreCase) ||
+                     parts[0].Equals("serial", StringComparison.OrdinalIgnoreCase)))
+                {
+                    return Uri.UnescapeDataString(parts[1]).Trim();
+                }
+            }
+
+            var segment = uri.Segments.LastOrDefault()?.Trim('/');
+            if (!string.IsNullOrWhiteSpace(segment))
+            {
+                return Uri.UnescapeDataString(segment).Trim();
+            }
+        }
+
+        var labels = new[]
+        {
+            "asset id:", "asset id=", "assetid:", "assetid=",
+            "asset tag:", "asset tag=", "assettag:", "assettag=",
+            "asset:", "asset=", "tag:", "tag=",
+            "serial number:", "serial number=", "serial:", "serial=",
+            "s/n:", "s/n=", "sn:", "sn="
+        };
+        foreach (var label in labels)
+        {
+            var index = text.IndexOf(label, StringComparison.OrdinalIgnoreCase);
+            if (index >= 0)
+            {
+                return text[(index + label.Length)..].Split(new[] { '\r', '\n', ',', ';', '|' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim() ?? text;
+            }
+        }
+
+        return text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim() ?? text;
+    }
+
+    private static string NormalizeLookup(string? value) =>
+        new((value ?? string.Empty).Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant).ToArray());
+
+    private static string FormatBytes(long bytes) =>
+        bytes < 1024 ? $"{bytes} B" :
+        bytes < 1024 * 1024 ? $"{bytes / 1024d:0.#} KB" :
+        $"{bytes / 1024d / 1024d:0.#} MB";
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("reconIqBarcodeScanner.stop", MobileScannerVideoId);
+        }
+        catch
+        {
+            // Browser JS may already be disconnected during navigation.
+        }
+
+        if (_isRecordingVoice)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("reconIqMobileEvidence.cancelVoiceRecording");
+            }
+            catch
+            {
+                // Browser JS may already be disconnected during navigation.
+            }
+        }
+
+        _barcodeScannerReference?.Dispose();
+    }
+
+    private sealed class VoiceCaptureResult
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("dataUrl")]
+        public string? DataUrl { get; set; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("mimeType")]
+        public string? MimeType { get; set; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("size")]
+        public long Size { get; set; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("durationSeconds")]
+        public int DurationSeconds { get; set; }
+    }
+}

@@ -1,0 +1,528 @@
+@page "/assets"
+@inject IUploadedInventorySource UploadedInventorySource
+@inject IAssetEditStore AssetEditStore
+@inject IWorkbookAssetEditWriter WorkbookWriter
+@inject ISnackbar Snackbar
+
+<PageHeader Eyebrow="Editable enterprise grid" Title="Asset Explorer" Summary="@HeaderSummary">
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync">Refresh Workbook</MudButton>
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.FileDownload" Href="/api/inventory/export">Download Excel</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAllAsync" Disabled="@(!_rows.Any(row => row.IsDirty))">Save Changes</MudButton>
+</PageHeader>
+
+@if (_snapshot is null)
+{
+    <MudPaper Class="empty-state" Elevation="0">
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        <MudText Typo="Typo.h6">Loading uploaded assets</MudText>
+    </MudPaper>
+}
+else
+{
+    <section class="density-strip">
+        <div class="density-tile">
+            <span>Rows in view</span>
+            <strong>@FilteredCount.ToString("N0")</strong>
+        </div>
+        <div class="density-tile">
+            <span>Workbook rows</span>
+            <strong>@_snapshot.TotalRows.ToString("N0")</strong>
+        </div>
+        <div class="density-tile">
+            <span>Saved edits</span>
+            <strong>@_savedEditCount.ToString("N0")</strong>
+        </div>
+        <div class="density-tile">
+            <span>Unsaved edits</span>
+            <strong>@_rows.Count(row => row.IsDirty).ToString("N0")</strong>
+        </div>
+    </section>
+
+    @if (_editingRow is not null)
+    {
+        var editing = _editingRow;
+        <MudPaper Class="workspace-panel asset-edit-panel" Elevation="0">
+            <div class="panel-title-row">
+                <div>
+                    <MudText Typo="Typo.h6">Edit Full Asset Record</MudText>
+                    <MudText Typo="Typo.body2" Class="muted">Editing source key: @editing.SourceAssetTag. Saved corrections are stored by the app and applied over the uploaded workbook.</MudText>
+                </div>
+                <div class="inline-action-row">
+                    @if (editing.IsDirty)
+                    {
+                        <StatusPill Text="Unsaved" Tone="warning" />
+                    }
+                    else
+                    {
+                        <StatusPill Text="Saved" Tone="success" />
+                    }
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Close" OnClick="CloseEditor">Close</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="@(() => SaveRowAsync(editing))" Disabled="@(!editing.IsDirty)">Save Asset</MudButton>
+                </div>
+            </div>
+
+            <MudGrid Class="edit-panel-grid">
+                <MudItem xs="12" md="3"><MudTextField T="string" Label="Asset tag" Value="@editing.AssetTag" ValueChanged="@((string value) => Set(editing, row => row.AssetTag = value))" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" /></MudItem>
+                <MudItem xs="12" md="3"><MudTextField T="string" Label="Serial number" Value="@editing.SerialNumber" ValueChanged="@((string value) => Set(editing, row => row.SerialNumber = value))" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" /></MudItem>
+                <MudItem xs="12" md="3"><MudTextField T="string" Label="Host name" Value="@editing.HostName" ValueChanged="@((string value) => Set(editing, row => row.HostName = value))" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" /></MudItem>
+                <MudItem xs="12" md="3"><MudTextField T="string" Label="Asset status" Value="@editing.AssetStatus" ValueChanged="@((string value) => Set(editing, row => row.AssetStatus = value))" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" /></MudItem>
+
+                <MudItem xs="12" md="3">
+                    <MudAutocomplete T="string"
+                                     Label="User name"
+                                     Value="@editing.UserName"
+                                     ValueChanged="@((string value) => Set(editing, row => row.UserName = value ?? string.Empty))"
+                                     SearchFunc="@SearchUserNames"
+                                     CoerceText="true"
+                                     CoerceValue="true"
+                                     ResetValueOnEmptyText="false"
+                                     MaxItems="12"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Immediate="true"
+                                     Class="user-suggest-input" />
+                </MudItem>
+                <MudItem xs="12" md="3"><MudTextField T="string" Label="Employee ID" Value="@editing.EmployeeId" ValueChanged="@((string value) => Set(editing, row => row.EmployeeId = value))" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" /></MudItem>
+                <MudItem xs="12" md="3"><MudTextField T="string" Label="Department" Value="@editing.Department" ValueChanged="@((string value) => Set(editing, row => row.Department = value))" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" /></MudItem>
+                <MudItem xs="12" md="3"><MudTextField T="string" Label="Location / floor" Value="@editing.AssetFloor" ValueChanged="@((string value) => Set(editing, row => row.AssetFloor = value))" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" /></MudItem>
+
+                <MudItem xs="12" md="3"><MudTextField T="string" Label="Asset type" Value="@editing.AssetType" ValueChanged="@((string value) => Set(editing, row => row.AssetType = value))" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" /></MudItem>
+                <MudItem xs="12" md="3"><MudTextField T="string" Label="Asset category" Value="@editing.AssetCategory" ValueChanged="@((string value) => Set(editing, row => row.AssetCategory = value))" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" /></MudItem>
+                <MudItem xs="12" md="3"><MudTextField T="string" Label="Single / group" Value="@editing.SingleOrGroup" ValueChanged="@((string value) => Set(editing, row => row.SingleOrGroup = value))" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" /></MudItem>
+                <MudItem xs="12" md="3"><MudTextField T="string" Label="Manufacturer" Value="@editing.Manufacturer" ValueChanged="@((string value) => Set(editing, row => row.Manufacturer = value))" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" /></MudItem>
+
+                <MudItem xs="12" md="3"><MudTextField T="string" Label="Model number" Value="@editing.ModelNumber" ValueChanged="@((string value) => Set(editing, row => row.ModelNumber = value))" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" /></MudItem>
+                <MudItem xs="12" md="3"><MudTextField T="string" Label="Warranty start yyyy-mm-dd" Value="@editing.WarrantyStart" ValueChanged="@((string value) => Set(editing, row => row.WarrantyStart = value))" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" /></MudItem>
+                <MudItem xs="12" md="3"><MudTextField T="string" Label="Warranty end yyyy-mm-dd" Value="@editing.WarrantyEnd" ValueChanged="@((string value) => Set(editing, row => row.WarrantyEnd = value))" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" /></MudItem>
+                <MudItem xs="12" md="3"><MudTextField T="string" Label="PO number" Value="@editing.PurchaseOrderNumber" ValueChanged="@((string value) => Set(editing, row => row.PurchaseOrderNumber = value))" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" /></MudItem>
+
+                <MudItem xs="12" md="3"><MudTextField T="string" Label="PO date yyyy-mm-dd" Value="@editing.PurchaseOrderDate" ValueChanged="@((string value) => Set(editing, row => row.PurchaseOrderDate = value))" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" /></MudItem>
+                <MudItem xs="12" md="3"><MudTextField T="string" Label="Invoice number" Value="@editing.InvoiceNumber" ValueChanged="@((string value) => Set(editing, row => row.InvoiceNumber = value))" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" /></MudItem>
+                <MudItem xs="12" md="3"><MudTextField T="string" Label="Invoice date yyyy-mm-dd" Value="@editing.InvoiceDate" ValueChanged="@((string value) => Set(editing, row => row.InvoiceDate = value))" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" /></MudItem>
+                <MudItem xs="12" md="3"><MudTextField T="string" Label="Windows patch" Value="@editing.WindowsPatch" ValueChanged="@((string value) => Set(editing, row => row.WindowsPatch = value))" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" /></MudItem>
+
+                <MudItem xs="12" md="3"><MudTextField T="string" Label="Sentinel status" Value="@editing.SentinelStatus" ValueChanged="@((string value) => Set(editing, row => row.SentinelStatus = value))" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" /></MudItem>
+                <MudItem xs="12" md="9"><MudTextField T="string" Label="Remarks" Value="@editing.Remarks" ValueChanged="@((string value) => Set(editing, row => row.Remarks = value))" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Lines="2" /></MudItem>
+            </MudGrid>
+        </MudPaper>
+    }
+
+    <section class="enterprise-grid-shell">
+        <div class="grid-control-bar">
+            <MudTextField T="string" @bind-Value="_search" Placeholder="Search asset tag, serial, host, user, employee, department" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudSelect T="string" @bind-Value="_status" Dense="true" Label="Status" Variant="Variant.Outlined" Margin="Margin.Dense">
+                <MudSelectItem Value="@_all">All statuses</MudSelectItem>
+                @foreach (var status in StatusOptions)
+                {
+                    <MudSelectItem Value="@status">@status</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="string" @bind-Value="_department" Dense="true" Label="Department" Variant="Variant.Outlined" Margin="Margin.Dense">
+                <MudSelectItem Value="@_all">All departments</MudSelectItem>
+                @foreach (var department in DepartmentOptions)
+                {
+                    <MudSelectItem Value="@department">@department</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="string" @bind-Value="_type" Dense="true" Label="Asset type" Variant="Variant.Outlined" Margin="Margin.Dense">
+                <MudSelectItem Value="@_all">All types</MudSelectItem>
+                @foreach (var type in TypeOptions)
+                {
+                    <MudSelectItem Value="@type">@type</MudSelectItem>
+                }
+            </MudSelect>
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAllAsync" Disabled="@(!_rows.Any(row => row.IsDirty))">Save</MudButton>
+        </div>
+
+        <div class="table-meta-row">
+            <div>
+                <strong>Editable uploaded master inventory</strong>
+                <span>Edit directly in the grid, open a row for all fields, then save changes.</span>
+            </div>
+            <StatusPill Text="Editable overlay" Tone="success" />
+        </div>
+
+        <MudTable Items="FilteredAssets" Hover="true" Dense="true" FixedHeader="true" Height="620px" RowsPerPage="25" Class="enterprise-table editable-table">
+            <ColGroup>
+                <col class="asset-col" />
+                <col class="custodian-col" />
+                <col class="location-col" />
+                <col class="status-col" />
+                <col class="device-col" />
+                <col class="actions-col" />
+            </ColGroup>
+            <HeaderContent>
+                <MudTh>Asset</MudTh>
+                <MudTh>Custodian</MudTh>
+                <MudTh>Department / Location</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh>Device</MudTh>
+                <MudTh>Actions</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Asset">
+                    <div class="asset-cell">
+                        <span class="asset-glyph"><MudIcon Icon="@Icons.Material.Filled.DevicesOther" Size="Size.Small" /></span>
+                        <div class="editable-cell-stack">
+                            <MudTextField T="string" Value="@context.AssetTag" ValueChanged="@((string value) => Set(context, row => row.AssetTag = value))" Immediate="true" Margin="Margin.Dense" Variant="Variant.Text" Class="grid-edit-input strong-input" />
+                            <MudTextField T="string" Value="@context.SerialNumber" ValueChanged="@((string value) => Set(context, row => row.SerialNumber = value))" Placeholder="Serial number" Immediate="true" Margin="Margin.Dense" Variant="Variant.Text" Class="grid-edit-input sub-input" />
+                        </div>
+                    </div>
+                </MudTd>
+                <MudTd DataLabel="Custodian">
+                    <div class="editable-cell-stack">
+                        <MudAutocomplete T="string"
+                                         Value="@context.UserName"
+                                         ValueChanged="@((string value) => Set(context, row => row.UserName = value ?? string.Empty))"
+                                         SearchFunc="@SearchUserNames"
+                                         CoerceText="true"
+                                         CoerceValue="true"
+                                         ResetValueOnEmptyText="false"
+                                         MaxItems="12"
+                                         Placeholder="User name"
+                                         Immediate="true"
+                                         Margin="Margin.Dense"
+                                         Variant="Variant.Text"
+                                         Class="grid-edit-input user-suggest-input" />
+                        <MudTextField T="string" Value="@context.EmployeeId" ValueChanged="@((string value) => Set(context, row => row.EmployeeId = value))" Placeholder="Employee ID" Immediate="true" Margin="Margin.Dense" Variant="Variant.Text" Class="grid-edit-input sub-input" />
+                    </div>
+                </MudTd>
+                <MudTd DataLabel="Department / Location">
+                    <div class="editable-cell-stack">
+                        <MudTextField T="string" Value="@context.Department" ValueChanged="@((string value) => Set(context, row => row.Department = value))" Placeholder="Department" Immediate="true" Margin="Margin.Dense" Variant="Variant.Text" Class="grid-edit-input" />
+                        <MudTextField T="string" Value="@context.AssetFloor" ValueChanged="@((string value) => Set(context, row => row.AssetFloor = value))" Placeholder="Location / floor" Immediate="true" Margin="Margin.Dense" Variant="Variant.Text" Class="grid-edit-input sub-input" />
+                    </div>
+                </MudTd>
+                <MudTd DataLabel="Status">
+                    <MudTextField T="string" Value="@context.AssetStatus" ValueChanged="@((string value) => Set(context, row => row.AssetStatus = value))" Placeholder="Status" Immediate="true" Margin="Margin.Dense" Variant="Variant.Text" Class="grid-edit-input" />
+                    <StatusPill Text="@Clean(context.AssetStatus, "Blank")" Tone="@StatusTone(context.AssetStatus)" />
+                </MudTd>
+                <MudTd DataLabel="Device">
+                    <div class="editable-cell-stack">
+                        <MudTextField T="string" Value="@context.Manufacturer" ValueChanged="@((string value) => Set(context, row => row.Manufacturer = value))" Placeholder="Manufacturer" Immediate="true" Margin="Margin.Dense" Variant="Variant.Text" Class="grid-edit-input" />
+                        <MudTextField T="string" Value="@context.ModelNumber" ValueChanged="@((string value) => Set(context, row => row.ModelNumber = value))" Placeholder="Model" Immediate="true" Margin="Margin.Dense" Variant="Variant.Text" Class="grid-edit-input sub-input" />
+                    </div>
+                </MudTd>
+                <MudTd>
+                    <div class="row-actions">
+                        <MudIconButton Icon="@Icons.Material.Filled.EditNote" OnClick="@(() => BeginEdit(context))" Size="Size.Small" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Save" OnClick="@(() => SaveRowAsync(context))" Disabled="@(!context.IsDirty)" Size="Size.Small" />
+                    </div>
+                </MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new[] { 10, 25, 50 }" />
+            </PagerContent>
+        </MudTable>
+    </section>
+}
+
+@code {
+    private UploadedInventorySnapshot? _snapshot;
+    private List<EditableAssetRow> _rows = [];
+    private string[] _userNameSuggestions = [];
+    private EditableAssetRow? _editingRow;
+    private string _search = string.Empty;
+    private string _status = "All";
+    private string _department = "All";
+    private string _type = "All";
+    private int _savedEditCount;
+    private readonly string _all = "All";
+
+    private string HeaderSummary => _snapshot is null
+        ? "Loading workbook rows."
+        : $"Showing {_snapshot.TotalRows:N0} rows from {_snapshot.SourceFileName}. Edits are written back to the Excel workbook.";
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _snapshot = await UploadedInventorySource.GetSnapshotAsync();
+        var edits = await AssetEditStore.GetAllAsync();
+        _savedEditCount = edits.Count;
+
+        var sourceKeyBySavedTag = edits.Values
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.AssetTag))
+            .GroupBy(entry => entry.AssetTag, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Last().SourceAssetTag, StringComparer.OrdinalIgnoreCase);
+
+        var previousEditKey = _editingRow?.SourceAssetTag;
+        _rows = _snapshot.Assets
+            .Select(asset => EditableAssetRow.From(asset, sourceKeyBySavedTag.TryGetValue(asset.AssetTag, out var sourceKey) ? sourceKey : asset.AssetTag))
+            .ToList();
+        _userNameSuggestions = _rows
+            .Select(row => row.UserName?.Trim())
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => name)
+            .ToArray()!;
+
+        _editingRow = previousEditKey is null
+            ? null
+            : _rows.FirstOrDefault(row => string.Equals(row.SourceAssetTag, previousEditKey, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private IEnumerable<string> StatusOptions => DistinctValues(row => Clean(row.AssetStatus, "Blank"));
+    private IEnumerable<string> DepartmentOptions => DistinctValues(row => Clean(row.Department, "Unknown department"));
+    private IEnumerable<string> TypeOptions => DistinctValues(row => Clean(row.AssetType, "Unknown type"));
+
+    private int FilteredCount => FilteredAssets.Count();
+
+    private IEnumerable<EditableAssetRow> FilteredAssets =>
+        _rows
+        .Where(row =>
+            (_status == _all || string.Equals(Clean(row.AssetStatus, "Blank"), _status, StringComparison.OrdinalIgnoreCase)) &&
+            (_department == _all || string.Equals(Clean(row.Department, "Unknown department"), _department, StringComparison.OrdinalIgnoreCase)) &&
+            (_type == _all || string.Equals(Clean(row.AssetType, "Unknown type"), _type, StringComparison.OrdinalIgnoreCase)) &&
+            (string.IsNullOrWhiteSpace(_search) ||
+             Contains(row.AssetTag, _search) ||
+             Contains(row.SerialNumber, _search) ||
+             Contains(row.HostName, _search) ||
+             Contains(row.UserName, _search) ||
+             Contains(row.EmployeeId, _search) ||
+             Contains(row.Department, _search) ||
+             Contains(row.AssetFloor, _search)))
+        .OrderBy(row => row.AssetTag);
+
+    private IEnumerable<string> DistinctValues(Func<EditableAssetRow, string> selector) =>
+        _rows
+            .Select(selector)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(value => value);
+
+    private void BeginEdit(EditableAssetRow row) => _editingRow = row;
+    private void CloseEditor() => _editingRow = null;
+
+    private void Set(EditableAssetRow row, Action<EditableAssetRow> update)
+    {
+        update(row);
+        row.IsDirty = true;
+    }
+
+    private Task<IEnumerable<string>> SearchUserNames(string? value, CancellationToken cancellationToken)
+    {
+        IEnumerable<string> matches = _userNameSuggestions;
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            matches = matches.Where(name => name.Contains(value, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return Task.FromResult(matches.Take(12));
+    }
+
+    private async Task SaveRowAsync(EditableAssetRow row)
+    {
+        var request = row.ToRequest();
+        try
+        {
+            await WorkbookWriter.SaveEditsAsync([request]);
+            await AssetEditStore.SaveAsync(request);
+            row.IsDirty = false;
+            Snackbar.Add($"Saved asset {row.AssetTag} to Excel.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            Snackbar.Add(exception.Message, Severity.Error);
+        }
+    }
+
+    private async Task SaveAllAsync()
+    {
+        var dirtyRows = _rows.Where(row => row.IsDirty).ToArray();
+        if (dirtyRows.Length == 0)
+        {
+            return;
+        }
+
+        var requests = dirtyRows.Select(row => row.ToRequest()).ToArray();
+        try
+        {
+            await WorkbookWriter.SaveEditsAsync(requests);
+            await AssetEditStore.SaveManyAsync(requests);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            Snackbar.Add(exception.Message, Severity.Error);
+            return;
+        }
+
+        foreach (var row in dirtyRows)
+        {
+            row.IsDirty = false;
+        }
+
+        Snackbar.Add($"Saved {dirtyRows.Length:N0} asset change{(dirtyRows.Length == 1 ? string.Empty : "s")} to Excel.", Severity.Success);
+        await LoadAsync();
+    }
+
+    private static bool Contains(string? value, string search) =>
+        value?.Contains(search, StringComparison.OrdinalIgnoreCase) == true;
+
+    private static string Clean(string? value, string fallback) =>
+        string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+
+    private static string StatusTone(string? status) =>
+        string.Equals(status, "Active", StringComparison.OrdinalIgnoreCase) ? "success" :
+        string.IsNullOrWhiteSpace(status) ? "neutral" : "warning";
+
+    private static string FormatDate(DateOnly? date) =>
+        date?.ToString("yyyy-MM-dd") ?? string.Empty;
+
+    private static DateOnly? ParseDate(string? value) =>
+        DateOnly.TryParse(value, out var date) ? date : null;
+
+    private sealed class EditableAssetRow
+    {
+        public required string SourceAssetTag { get; init; }
+        public string AssetTag { get; set; } = string.Empty;
+        public string SerialNumber { get; set; } = string.Empty;
+        public string HostName { get; set; } = string.Empty;
+        public string UserName { get; set; } = string.Empty;
+        public string EmployeeId { get; set; } = string.Empty;
+        public string Department { get; set; } = string.Empty;
+        public string AssetFloor { get; set; } = string.Empty;
+        public string AssetType { get; set; } = string.Empty;
+        public string AssetCategory { get; set; } = string.Empty;
+        public string SingleOrGroup { get; set; } = string.Empty;
+        public string AssetStatus { get; set; } = string.Empty;
+        public string Manufacturer { get; set; } = string.Empty;
+        public string ModelNumber { get; set; } = string.Empty;
+        public string WarrantyStart { get; set; } = string.Empty;
+        public string WarrantyEnd { get; set; } = string.Empty;
+        public string PurchaseOrderNumber { get; set; } = string.Empty;
+        public string PurchaseOrderDate { get; set; } = string.Empty;
+        public string InvoiceNumber { get; set; } = string.Empty;
+        public string InvoiceDate { get; set; } = string.Empty;
+        public string Remarks { get; set; } = string.Empty;
+        public string WindowsPatch { get; set; } = string.Empty;
+        public string SentinelStatus { get; set; } = string.Empty;
+        public bool IsDirty { get; set; }
+        private Dictionary<string, string> OriginalValues { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+        public static EditableAssetRow From(UploadedAssetRecord asset, string sourceAssetTag)
+        {
+            var row = new EditableAssetRow
+            {
+                SourceAssetTag = sourceAssetTag,
+                AssetTag = asset.AssetTag,
+                SerialNumber = asset.SerialNumber ?? string.Empty,
+                HostName = asset.HostName ?? string.Empty,
+                UserName = asset.UserName ?? string.Empty,
+                EmployeeId = asset.EmployeeId ?? string.Empty,
+                Department = asset.Department ?? string.Empty,
+                AssetFloor = asset.AssetFloor ?? string.Empty,
+                AssetType = asset.AssetType ?? string.Empty,
+                AssetCategory = asset.AssetCategory ?? string.Empty,
+                SingleOrGroup = asset.SingleOrGroup ?? string.Empty,
+                AssetStatus = asset.AssetStatus ?? string.Empty,
+                Manufacturer = asset.Manufacturer ?? string.Empty,
+                ModelNumber = asset.ModelNumber ?? string.Empty,
+                WarrantyStart = FormatDate(asset.WarrantyStart),
+                WarrantyEnd = FormatDate(asset.WarrantyEnd),
+                PurchaseOrderNumber = asset.PurchaseOrderNumber ?? string.Empty,
+                PurchaseOrderDate = FormatDate(asset.PurchaseOrderDate),
+                InvoiceNumber = asset.InvoiceNumber ?? string.Empty,
+                InvoiceDate = FormatDate(asset.InvoiceDate),
+                Remarks = asset.Remarks ?? string.Empty,
+                WindowsPatch = asset.WindowsPatch ?? string.Empty,
+                SentinelStatus = asset.SentinelStatus ?? string.Empty
+            };
+
+            row.CaptureOriginalValues();
+            return row;
+        }
+
+        public AssetEditRequest ToRequest() =>
+            new AssetEditRequest(
+                SourceAssetTag,
+                AssetTag,
+                SerialNumber,
+                HostName,
+                UserName,
+                EmployeeId,
+                Department,
+                AssetFloor,
+                AssetType,
+                AssetCategory,
+                SingleOrGroup,
+                AssetStatus,
+                Manufacturer,
+                ModelNumber,
+                ParseDate(WarrantyStart),
+                ParseDate(WarrantyEnd),
+                PurchaseOrderNumber,
+                ParseDate(PurchaseOrderDate),
+                InvoiceNumber,
+                ParseDate(InvoiceDate),
+                Remarks,
+                WindowsPatch,
+                SentinelStatus)
+            {
+                Changes = BuildChanges()
+            };
+
+        private void CaptureOriginalValues() =>
+            OriginalValues = ChangeFields()
+                .ToDictionary(field => field.FieldName, field => NormalizeChangeValue(field.Value), StringComparer.OrdinalIgnoreCase);
+
+        private AssetFieldChange[] BuildChanges()
+        {
+            var changes = new List<AssetFieldChange>();
+            foreach (var field in ChangeFields())
+            {
+                var previousValue = OriginalValues.TryGetValue(field.FieldName, out var previous)
+                    ? previous
+                    : string.Empty;
+                var newValue = NormalizeChangeValue(field.Value);
+
+                if (string.Equals(previousValue, newValue, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                changes.Add(new AssetFieldChange(
+                    field.FieldName,
+                    field.ChangeType,
+                    NullIfBlank(previousValue),
+                    NullIfBlank(newValue)));
+            }
+
+            return changes.ToArray();
+        }
+
+        private IEnumerable<ChangeField> ChangeFields()
+        {
+            yield return new("Asset tag / sticker", "Sticker Mismatch", AssetTag);
+            yield return new("Serial number", "Serial Mismatch", SerialNumber);
+            yield return new("Host name", "Device Details Change", HostName);
+            yield return new("User name", "User Mismatch", UserName);
+            yield return new("Employee ID", "Custodian Change", EmployeeId);
+            yield return new("Department", "Department Change", Department);
+            yield return new("Location / floor", "Location Change", AssetFloor);
+            yield return new("Asset type", "Asset Type Variance", AssetType);
+            yield return new("Asset category", "Classification Change", AssetCategory);
+            yield return new("Single / group", "Classification Change", SingleOrGroup);
+            yield return new("Asset status", "Status Change", AssetStatus);
+            yield return new("Manufacturer", "Device Details Change", Manufacturer);
+            yield return new("Model number", "Device Details Change", ModelNumber);
+            yield return new("Warranty start", "Warranty Change", FormatDate(ParseDate(WarrantyStart)));
+            yield return new("Warranty end", "Warranty Change", FormatDate(ParseDate(WarrantyEnd)));
+            yield return new("PO number", "Commercial Data Change", PurchaseOrderNumber);
+            yield return new("PO date", "Commercial Data Change", FormatDate(ParseDate(PurchaseOrderDate)));
+            yield return new("Invoice number", "Commercial Data Change", InvoiceNumber);
+            yield return new("Invoice date", "Commercial Data Change", FormatDate(ParseDate(InvoiceDate)));
+            yield return new("Remarks", "Audit Remarks Update", Remarks);
+            yield return new("Windows patch", "Security Posture Change", WindowsPatch);
+            yield return new("Sentinel status", "Security Posture Change", SentinelStatus);
+        }
+
+        private static string NormalizeChangeValue(string? value) =>
+            string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+
+        private static string? NullIfBlank(string value) =>
+            string.IsNullOrWhiteSpace(value) ? null : value;
+
+        private sealed record ChangeField(string FieldName, string ChangeType, string? Value);
+    }
+}

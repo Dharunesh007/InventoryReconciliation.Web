@@ -1,0 +1,11 @@
+@page "/notifications"
+
+<PageHeader Eyebrow="Real-time operations" Title="Notification Center" Summary="Notifications will be generated from real imports, verification findings, approval SLA events, and exceptions.">
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ManageSearch" Href="/assets">View Uploaded Assets</MudButton>
+</PageHeader>
+
+<MudPaper Class="empty-state" Elevation="0">
+    <MudIcon Icon="@Icons.Material.Filled.NotificationsOff" Size="Size.Large" />
+    <MudText Typo="Typo.h5">No notifications yet</MudText>
+    <MudText Typo="Typo.body2">No placeholder alerts are being shown. Alerts will appear after real verification or approval activity.</MudText>
+</MudPaper>

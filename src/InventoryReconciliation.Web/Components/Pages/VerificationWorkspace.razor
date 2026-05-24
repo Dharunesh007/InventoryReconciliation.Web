@@ -1,0 +1,434 @@
+@page "/verification"
+@using Microsoft.JSInterop
+@inject IUploadedInventorySource UploadedInventorySource
+@inject Microsoft.JSInterop.IJSRuntime JS
+@inject ISnackbar Snackbar
+@implements IAsyncDisposable
+
+<PageHeader Eyebrow="Mission control" Title="Verification Workspace" Summary="Select an uploaded asset, capture the physical observation, and let the workspace surface real mismatches without inventing reconciliation data.">
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync">Refresh Workbook</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save">Submit Verification</MudButton>
+</PageHeader>
+
+@if (_snapshot is null)
+{
+    <MudPaper Class="empty-state" Elevation="0">
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        <MudText Typo="Typo.h6">Loading uploaded assets</MudText>
+    </MudPaper>
+}
+else if (_selectedAsset is null)
+{
+    <MudPaper Class="empty-state" Elevation="0">
+        <MudIcon Icon="@Icons.Material.Filled.UploadFile" Size="Size.Large" />
+        <MudText Typo="Typo.h5">No uploaded assets available</MudText>
+    </MudPaper>
+}
+else
+{
+    <section class="verification-command-grid">
+        <MudPaper Class="workspace-panel scanner-panel" Elevation="0">
+            <div class="panel-title-row">
+                <div>
+                    <MudText Typo="Typo.h6">Scan & Select</MudText>
+                    <MudText Typo="Typo.body2" Class="muted">Search is limited to the uploaded workbook.</MudText>
+                </div>
+                <StatusPill Text="@($"{FilteredAssetOptions.Count():N0} matches")" Tone="info" />
+            </div>
+
+            <MudTextField T="string" @bind-Value="_assetSearch" Label="Search asset, serial, user" Variant="Variant.Outlined" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" />
+            <MudSelect T="string" Label="Selected uploaded asset" Value="@_selectedAssetTag" ValueChanged="OnAssetChanged" Variant="Variant.Outlined">
+                @foreach (var asset in FilteredAssetOptions.Take(60))
+                {
+                    <MudSelectItem Value="@asset.AssetTag">@asset.AssetTag - @Clean(asset.UserName, "Unassigned")</MudSelectItem>
+                }
+            </MudSelect>
+
+            <div class="@($"scanner-frame {(_isScanning ? "is-scanning" : string.Empty)}")">
+                <span></span><span></span><span></span><span></span>
+                <video id="@ScannerVideoId" class="scanner-video" muted playsinline></video>
+                @if (!_isScanning)
+                {
+                    <div class="activity-icon"><MudIcon Icon="@Icons.Material.Filled.QrCodeScanner" /></div>
+                }
+                <div class="scanner-status">@_scannerMessage</div>
+            </div>
+
+            <div class="scanner-actions">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.PhotoCamera"
+                           Disabled="_isScanning"
+                           OnClick="StartScannerAsync">
+                    Start Camera Scan
+                </MudButton>
+                <MudButton Variant="Variant.Outlined"
+                           StartIcon="@Icons.Material.Filled.StopCircle"
+                           Disabled="@(!_isScanning)"
+                           OnClick="StopScannerAsync">
+                    Stop
+                </MudButton>
+            </div>
+
+            <div class="profile-list">
+                <span>Asset tag <strong>@_selectedAsset.AssetTag</strong></span>
+                <span>Serial <strong>@Clean(_selectedAsset.SerialNumber, "Blank")</strong></span>
+                <span>Status <strong>@Clean(_selectedAsset.AssetStatus, "Blank")</strong></span>
+                <span>Workbook row <strong>@_selectedAsset.RowNumber</strong></span>
+            </div>
+        </MudPaper>
+
+        <div class="verification-stack">
+            <MudPaper Class="comparison-card" Elevation="0">
+                <div class="comparison-toolbar">
+                    <div>
+                        <MudText Typo="Typo.h6">System vs Physical</MudText>
+                        <MudText Typo="Typo.body2" Class="muted">Actual values are blank until the auditor captures what is physically present.</MudText>
+                    </div>
+                    <StatusPill Text="Draft observation" Tone="warning" />
+                </div>
+
+                <div class="compare-split">
+                    <section class="compare-column">
+                        <h3>Uploaded system data</h3>
+                        <div class="profile-list">
+                            <span>User <strong>@Clean(_selectedAsset.UserName, "Blank")</strong></span>
+                            <span>Employee ID <strong>@Clean(_selectedAsset.EmployeeId, "Blank")</strong></span>
+                            <span>Department <strong>@Clean(_selectedAsset.Department, "Blank")</strong></span>
+                            <span>Location / floor <strong>@Clean(_selectedAsset.AssetFloor, "Blank")</strong></span>
+                            <span>Asset type <strong>@Clean(_selectedAsset.AssetType, "Blank")</strong></span>
+                            <span>Manufacturer <strong>@Clean(_selectedAsset.Manufacturer, "Blank")</strong></span>
+                        </div>
+                    </section>
+
+                    <section class="compare-column">
+                        <h3>Physical observation</h3>
+                        <MudTextField T="string" @bind-Value="_actualUser" Label="Actual user" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+                        <MudTextField T="string" @bind-Value="_actualDepartment" Label="Actual department" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+                        <MudTextField T="string" @bind-Value="_actualLocation" Label="Actual location / floor" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+                        <MudTextField T="string" @bind-Value="_actualSerial" Label="Actual serial number" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+                        <MudSelect T="string" @bind-Value="_condition" Label="Physical condition" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                            <MudSelectItem Value="@_good">Good</MudSelectItem>
+                            <MudSelectItem Value="@_damaged">Damaged</MudSelectItem>
+                            <MudSelectItem Value="@_missing">Missing</MudSelectItem>
+                        </MudSelect>
+                        <MudSwitch T="bool" @bind-Value="_stickerPresent" Label="Sticker present" Color="Color.Success" />
+                    </section>
+                </div>
+            </MudPaper>
+
+            <MudPaper Class="workspace-panel" Elevation="0">
+                <div class="panel-title-row">
+                    <div>
+                        <MudText Typo="Typo.h6">Variance Detection Matrix</MudText>
+                        <MudText Typo="Typo.body2" Class="muted">Rows update as physical values are entered.</MudText>
+                    </div>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@CapturedFields of 4 captured</MudChip>
+                </div>
+
+                <div class="comparison-grid">
+                    @foreach (var row in ComparisonRows)
+                    {
+                        <div class="@($"comparison-row {row.Tone}")">
+                            <span class="comparison-field">@row.Field</span>
+                            <strong>@row.SystemValue</strong>
+                            <MudIcon Icon="@row.Icon" />
+                            <div>
+                                <strong>@row.ActualValue</strong>
+                                <span class="cell-sub">@row.Outcome</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </MudPaper>
+        </div>
+
+        <MudPaper Class="insight-panel" Elevation="0">
+            <div>
+                <MudText Typo="Typo.h6">Reconciliation Intelligence</MudText>
+                <MudText Typo="Typo.body2" Class="muted">Confidence is based only on captured fields in this session.</MudText>
+            </div>
+            <div class="confidence-ring" style="@($"--confidence:{ConfidenceScore}; --confidence-color:{ConfidenceColor}")">@ConfidenceScore%</div>
+            <div class="insight-card">
+                <strong>@ConfidenceHeadline</strong>
+                <span class="insight-detail">@ConfidenceDetail</span>
+            </div>
+            <div class="insight-card">
+                <strong>Evidence capture</strong>
+                <span class="insight-detail">Attach image, barcode scan, geo-location, and voice notes when the backend workflow is enabled.</span>
+                <div class="inline-action-row">
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.PhotoCamera">Image</MudButton>
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Mic">Voice</MudButton>
+                </div>
+            </div>
+            <MudTextField T="string" @bind-Value="_remarks" Lines="4" Label="Verification remarks" Variant="Variant.Outlined" />
+            <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CloudDone">Submit Draft</MudButton>
+        </MudPaper>
+    </section>
+}
+
+@code {
+    private const string ScannerVideoId = "verificationScannerVideo";
+    private UploadedInventorySnapshot? _snapshot;
+    private UploadedAssetRecord? _selectedAsset;
+    private DotNetObjectReference<VerificationWorkspace>? _scannerReference;
+    private string _selectedAssetTag = string.Empty;
+    private string _assetSearch = string.Empty;
+    private string _actualUser = string.Empty;
+    private string _actualDepartment = string.Empty;
+    private string _actualLocation = string.Empty;
+    private string _actualSerial = string.Empty;
+    private string _condition = "Good";
+    private bool _stickerPresent = true;
+    private string _remarks = string.Empty;
+    private readonly string _good = "Good";
+    private readonly string _damaged = "Damaged";
+    private readonly string _missing = "Missing";
+    private bool _isScanning;
+    private string _scannerMessage = "Ready to scan uploaded asset tag or serial.";
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _snapshot = await UploadedInventorySource.GetSnapshotAsync();
+        _selectedAsset = _snapshot.Assets.FirstOrDefault();
+        _selectedAssetTag = _selectedAsset?.AssetTag ?? string.Empty;
+        ResetObservation();
+    }
+
+    private IEnumerable<UploadedAssetRecord> FilteredAssetOptions =>
+        (_snapshot?.Assets ?? [])
+        .Where(asset => string.IsNullOrWhiteSpace(_assetSearch) ||
+            Contains(asset.AssetTag, _assetSearch) ||
+            Contains(asset.SerialNumber, _assetSearch) ||
+            Contains(asset.UserName, _assetSearch) ||
+            Contains(asset.EmployeeId, _assetSearch))
+        .OrderBy(asset => asset.AssetTag);
+
+    private void OnAssetChanged(string value)
+    {
+        _selectedAssetTag = value;
+        _selectedAsset = _snapshot?.Assets.FirstOrDefault(asset => string.Equals(asset.AssetTag, value, StringComparison.OrdinalIgnoreCase));
+        ResetObservation();
+    }
+
+    private async Task StartScannerAsync()
+    {
+        try
+        {
+            _scannerReference ??= DotNetObjectReference.Create(this);
+            _scannerMessage = "Starting camera...";
+            await JS.InvokeVoidAsync("reconIqBarcodeScanner.start", ScannerVideoId, _scannerReference, nameof(OnBarcodeDetected));
+            _isScanning = true;
+            _scannerMessage = "Scanning... place the barcode or QR inside the frame.";
+        }
+        catch (Exception exception)
+        {
+            _isScanning = false;
+            _scannerMessage = "Camera scanner unavailable.";
+            Snackbar.Add($"Barcode scanner is not available: {exception.Message}", Severity.Error);
+        }
+    }
+
+    private async Task StopScannerAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("reconIqBarcodeScanner.stop", ScannerVideoId);
+        }
+        catch
+        {
+            // The camera stream may already be closed by navigation or browser permissions.
+        }
+
+        _isScanning = false;
+        _scannerMessage = "Scanner stopped.";
+    }
+
+    [JSInvokable]
+    public Task OnBarcodeDetected(string scannedValue)
+    {
+        _isScanning = false;
+
+        var matchedAsset = FindScannedAsset(scannedValue);
+        if (matchedAsset is null)
+        {
+            _assetSearch = scannedValue.Trim();
+            _scannerMessage = $"Scanned {scannedValue.Trim()}, but no uploaded asset matched.";
+            Snackbar.Add("Scanned value was not found in the uploaded workbook.", Severity.Warning);
+            StateHasChanged();
+            return Task.CompletedTask;
+        }
+
+        _assetSearch = matchedAsset.AssetTag;
+        OnAssetChanged(matchedAsset.AssetTag);
+        _scannerMessage = $"Scanned and selected {matchedAsset.AssetTag}.";
+        Snackbar.Add($"Asset {matchedAsset.AssetTag} selected from scan.", Severity.Success);
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private int CapturedFields =>
+        new[] { _actualUser, _actualDepartment, _actualLocation, _actualSerial }.Count(value => !string.IsNullOrWhiteSpace(value));
+
+    private int ConfidenceScore
+    {
+        get
+        {
+            if (_selectedAsset is null || CapturedFields == 0)
+            {
+                return 0;
+            }
+
+            var matches = ComparisonRows.Count(row => row.Tone == "success");
+            var captured = Math.Max(CapturedFields, 1);
+            return Math.Clamp((int)Math.Round(matches / (double)captured * 100), 0, 100);
+        }
+    }
+
+    private string ConfidenceColor =>
+        ConfidenceScore >= 75 ? "var(--mud-palette-success)" :
+        ConfidenceScore >= 45 ? "var(--mud-palette-warning)" :
+        CapturedFields == 0 ? "var(--mud-palette-primary)" : "var(--mud-palette-error)";
+
+    private string ConfidenceHeadline =>
+        CapturedFields == 0 ? "Awaiting physical input" :
+        ConfidenceScore >= 75 ? "Likely exact or near match" :
+        ConfidenceScore >= 45 ? "Partial match needs review" :
+        "Critical mismatch candidate";
+
+    private string ConfidenceDetail =>
+        CapturedFields == 0
+            ? "Enter the actual user, department, location, and serial number to generate a real comparison score."
+            : $"{CapturedFields} captured fields are being compared against the uploaded master row for {_selectedAssetTag}.";
+
+    private IEnumerable<CompareRow> ComparisonRows
+    {
+        get
+        {
+            if (_selectedAsset is null)
+            {
+                yield break;
+            }
+
+            yield return BuildCompare("User", _selectedAsset.UserName, _actualUser);
+            yield return BuildCompare("Department", _selectedAsset.Department, _actualDepartment);
+            yield return BuildCompare("Location / floor", _selectedAsset.AssetFloor, _actualLocation);
+            yield return BuildCompare("Serial number", _selectedAsset.SerialNumber, _actualSerial);
+            yield return new("Sticker", "No baseline in upload", _stickerPresent ? "Present" : "Missing", _stickerPresent ? "info" : "warning", _stickerPresent ? "Captured as present" : "Sticker missing observation", _stickerPresent ? Icons.Material.Filled.Info : Icons.Material.Filled.WarningAmber);
+            yield return new("Condition", "No baseline in upload", _condition, _condition == _good ? "info" : "warning", _condition == _good ? "Captured as good" : "Condition requires review", _condition == _good ? Icons.Material.Filled.Info : Icons.Material.Filled.ReportProblem);
+        }
+    }
+
+    private static CompareRow BuildCompare(string field, string? systemValue, string actualValue)
+    {
+        var system = Clean(systemValue, "Blank");
+        var actual = Clean(actualValue, "Not captured");
+
+        if (string.IsNullOrWhiteSpace(actualValue))
+        {
+            return new(field, system, actual, "neutral", "Awaiting physical input", Icons.Material.Filled.RadioButtonUnchecked);
+        }
+
+        if (string.Equals(system, actual, StringComparison.OrdinalIgnoreCase))
+        {
+            return new(field, system, actual, "success", "Exact match", Icons.Material.Filled.CheckCircle);
+        }
+
+        return new(field, system, actual, "critical", "Mismatch detected", Icons.Material.Filled.Error);
+    }
+
+    private void ResetObservation()
+    {
+        _actualUser = string.Empty;
+        _actualDepartment = string.Empty;
+        _actualLocation = string.Empty;
+        _actualSerial = string.Empty;
+        _condition = _good;
+        _stickerPresent = true;
+        _remarks = string.Empty;
+    }
+
+    private static bool Contains(string? value, string search) =>
+        value?.Contains(search, StringComparison.OrdinalIgnoreCase) == true;
+
+    private UploadedAssetRecord? FindScannedAsset(string scannedValue)
+    {
+        var token = ExtractScannedToken(scannedValue);
+        var normalized = NormalizeLookup(token);
+
+        return _snapshot?.Assets.FirstOrDefault(asset =>
+            NormalizeLookup(asset.AssetTag) == normalized ||
+            NormalizeLookup(asset.SerialNumber) == normalized ||
+            string.Equals(asset.AssetTag, token, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(asset.SerialNumber, token, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string ExtractScannedToken(string scannedValue)
+    {
+        var text = Clean(scannedValue, string.Empty);
+        if (Uri.TryCreate(text, UriKind.Absolute, out var uri))
+        {
+            var query = uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var pair in query)
+            {
+                var parts = pair.Split('=', 2);
+                if (parts.Length == 2 &&
+                    (parts[0].Equals("asset", StringComparison.OrdinalIgnoreCase) ||
+                     parts[0].Equals("assetTag", StringComparison.OrdinalIgnoreCase) ||
+                     parts[0].Equals("serial", StringComparison.OrdinalIgnoreCase)))
+                {
+                    return Uri.UnescapeDataString(parts[1]).Trim();
+                }
+            }
+
+            var segment = uri.Segments.LastOrDefault()?.Trim('/');
+            if (!string.IsNullOrWhiteSpace(segment))
+            {
+                return Uri.UnescapeDataString(segment).Trim();
+            }
+        }
+
+        var labels = new[]
+        {
+            "asset id:", "asset id=", "assetid:", "assetid=",
+            "asset tag:", "asset tag=", "assettag:", "assettag=",
+            "asset:", "asset=", "tag:", "tag=",
+            "serial number:", "serial number=", "serial:", "serial=",
+            "s/n:", "s/n=", "sn:", "sn="
+        };
+        foreach (var label in labels)
+        {
+            var index = text.IndexOf(label, StringComparison.OrdinalIgnoreCase);
+            if (index >= 0)
+            {
+                return text[(index + label.Length)..].Split(new[] { '\r', '\n', ',', ';', '|' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim() ?? text;
+            }
+        }
+
+        return text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim() ?? text;
+    }
+
+    private static string NormalizeLookup(string? value) =>
+        new((value ?? string.Empty).Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant).ToArray());
+
+    private static string Clean(string? value, string fallback) =>
+        string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("reconIqBarcodeScanner.stop", ScannerVideoId);
+        }
+        catch
+        {
+            // Browser JS may already be disconnected during navigation.
+        }
+
+        _scannerReference?.Dispose();
+    }
+
+    private sealed record CompareRow(string Field, string SystemValue, string ActualValue, string Tone, string Outcome, string Icon);
+}
