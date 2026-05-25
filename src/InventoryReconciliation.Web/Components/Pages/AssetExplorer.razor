@@ -3,11 +3,12 @@
 @inject IAssetEditStore AssetEditStore
 @inject IWorkbookAssetEditWriter WorkbookWriter
 @inject ISnackbar Snackbar
+@implements IDisposable
 
 <PageHeader Eyebrow="Editable enterprise grid" Title="Asset Explorer" Summary="@HeaderSummary">
     <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync">Refresh Workbook</MudButton>
     <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.FileDownload" Href="/api/inventory/export">Download Excel</MudButton>
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAllAsync" Disabled="@(!_rows.Any(row => row.IsDirty))">Save Changes</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAllAsync" Disabled="@(!_rows.Any(row => row.IsDirty))">Save Now</MudButton>
 </PageHeader>
 
 @if (_snapshot is null)
@@ -57,7 +58,7 @@ else
                         <StatusPill Text="Saved" Tone="success" />
                     }
                     <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Close" OnClick="CloseEditor">Close</MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="@(() => SaveRowAsync(editing))" Disabled="@(!editing.IsDirty)">Save Asset</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="@(() => SaveRowAsync(editing))" Disabled="@(!editing.IsDirty)">Save Now</MudButton>
                 </div>
             </div>
 
@@ -137,9 +138,9 @@ else
         <div class="table-meta-row">
             <div>
                 <strong>Editable uploaded master inventory</strong>
-                <span>Edit directly in the grid, open a row for all fields, then save changes.</span>
+                <span>Edit directly in the grid or full record panel. Changes auto-save to Excel after you stop typing.</span>
             </div>
-            <StatusPill Text="Editable overlay" Tone="success" />
+            <StatusPill Text="@_autoSaveMessage" Tone="@AutoSaveTone" />
         </div>
 
         <MudTable Items="FilteredAssets" Hover="true" Dense="true" FixedHeader="true" Height="620px" RowsPerPage="25" Class="enterprise-table editable-table">
@@ -228,6 +229,9 @@ else
     private string _type = "All";
     private int _savedEditCount;
     private readonly string _all = "All";
+    private readonly Dictionary<string, CancellationTokenSource> _autoSaveDebouncers = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _autoSavingRows = new(StringComparer.OrdinalIgnoreCase);
+    private string _autoSaveMessage = "Auto-save ready";
 
     private string HeaderSummary => _snapshot is null
         ? "Loading workbook rows."
@@ -297,6 +301,7 @@ else
     {
         update(row);
         row.IsDirty = true;
+        ScheduleAutoSave(row);
     }
 
     private Task<IEnumerable<string>> SearchUserNames(string? value, CancellationToken cancellationToken)
@@ -310,20 +315,57 @@ else
         return Task.FromResult(matches.Take(12));
     }
 
-    private async Task SaveRowAsync(EditableAssetRow row)
+    private async Task SaveRowAsync(EditableAssetRow row) =>
+        await SaveRowAsync(row, isAutoSave: false, CancellationToken.None);
+
+    private async Task SaveRowAsync(EditableAssetRow row, bool isAutoSave, CancellationToken cancellationToken)
     {
+        if (!row.IsDirty)
+        {
+            return;
+        }
+
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+
+        if (!isAutoSave)
+        {
+            CancelAutoSave(row.SourceAssetTag);
+        }
+
         var request = row.ToRequest();
+        _autoSavingRows.Add(row.SourceAssetTag);
+        _autoSaveMessage = $"Saving {Clean(row.AssetTag, row.SourceAssetTag)}...";
         try
         {
-            await WorkbookWriter.SaveEditsAsync([request]);
-            await AssetEditStore.SaveAsync(request);
-            row.IsDirty = false;
-            Snackbar.Add($"Saved asset {row.AssetTag} to Excel.", Severity.Success);
-            await LoadAsync();
+            await WorkbookWriter.SaveEditsAsync([request], cancellationToken);
+            await AssetEditStore.SaveAsync(request, cancellationToken);
+            row.MarkSaved();
+            _savedEditCount = (await AssetEditStore.GetAllAsync(cancellationToken)).Count;
+            RefreshUserNameSuggestions();
+            _autoSaveMessage = isAutoSave
+                ? $"Auto-saved {Clean(row.AssetTag, row.SourceAssetTag)}"
+                : $"Saved {Clean(row.AssetTag, row.SourceAssetTag)}";
+
+            if (!isAutoSave)
+            {
+                Snackbar.Add($"Saved asset {row.AssetTag} to Excel.", Severity.Success);
+            }
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
+            _autoSaveMessage = "Auto-save failed";
             Snackbar.Add(exception.Message, Severity.Error);
+        }
+        catch (OperationCanceledException)
+        {
+            // A newer edit superseded this pending auto-save.
+        }
+        finally
+        {
+            _autoSavingRows.Remove(row.SourceAssetTag);
         }
     }
 
@@ -338,6 +380,11 @@ else
         var requests = dirtyRows.Select(row => row.ToRequest()).ToArray();
         try
         {
+            foreach (var row in dirtyRows)
+            {
+                CancelAutoSave(row.SourceAssetTag);
+            }
+
             await WorkbookWriter.SaveEditsAsync(requests);
             await AssetEditStore.SaveManyAsync(requests);
         }
@@ -349,11 +396,86 @@ else
 
         foreach (var row in dirtyRows)
         {
-            row.IsDirty = false;
+            row.MarkSaved();
         }
 
+        _savedEditCount = (await AssetEditStore.GetAllAsync()).Count;
+        RefreshUserNameSuggestions();
+        _autoSaveMessage = $"Saved {dirtyRows.Length:N0} asset change{(dirtyRows.Length == 1 ? string.Empty : "s")}";
         Snackbar.Add($"Saved {dirtyRows.Length:N0} asset change{(dirtyRows.Length == 1 ? string.Empty : "s")} to Excel.", Severity.Success);
-        await LoadAsync();
+    }
+
+    private string AutoSaveTone =>
+        _autoSavingRows.Count > 0 ? "warning" :
+        _rows.Any(row => row.IsDirty) ? "info" :
+        "success";
+
+    private void ScheduleAutoSave(EditableAssetRow row)
+    {
+        CancelAutoSave(row.SourceAssetTag);
+        var cts = new CancellationTokenSource();
+        _autoSaveDebouncers[row.SourceAssetTag] = cts;
+        _autoSaveMessage = $"Auto-save queued for {Clean(row.AssetTag, row.SourceAssetTag)}";
+        _ = DebouncedAutoSaveAsync(row, cts);
+    }
+
+    private async Task DebouncedAutoSaveAsync(EditableAssetRow row, CancellationTokenSource cts)
+    {
+        try
+        {
+            await Task.Delay(900, cts.Token);
+            await InvokeAsync(async () =>
+            {
+                await SaveRowAsync(row, isAutoSave: true, cts.Token);
+                StateHasChanged();
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            // A newer edit arrived before this save window completed.
+        }
+        finally
+        {
+            await InvokeAsync(() =>
+            {
+                if (_autoSaveDebouncers.TryGetValue(row.SourceAssetTag, out var current) && ReferenceEquals(current, cts))
+                {
+                    _autoSaveDebouncers.Remove(row.SourceAssetTag);
+                }
+
+                cts.Dispose();
+                StateHasChanged();
+            });
+        }
+    }
+
+    private void CancelAutoSave(string sourceAssetTag)
+    {
+        if (_autoSaveDebouncers.Remove(sourceAssetTag, out var cts))
+        {
+            cts.Cancel();
+        }
+    }
+
+    private void RefreshUserNameSuggestions()
+    {
+        _userNameSuggestions = _rows
+            .Select(row => row.UserName?.Trim())
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => name)
+            .ToArray()!;
+    }
+
+    public void Dispose()
+    {
+        foreach (var cts in _autoSaveDebouncers.Values)
+        {
+            cts.Cancel();
+            cts.Dispose();
+        }
+
+        _autoSaveDebouncers.Clear();
     }
 
     private static bool Contains(string? value, string search) =>
@@ -431,6 +553,12 @@ else
 
             row.CaptureOriginalValues();
             return row;
+        }
+
+        public void MarkSaved()
+        {
+            CaptureOriginalValues();
+            IsDirty = false;
         }
 
         public AssetEditRequest ToRequest() =>
