@@ -8,6 +8,7 @@ namespace InventoryReconciliation.Infrastructure.Imports;
 public sealed class FileUploadedWorkbookStorage(IConfiguration configuration, IHostEnvironment environment) : IUploadedWorkbookStorage
 {
     private const long MaxUploadBytes = 50 * 1024 * 1024;
+    private const string LegacyRelativeWorkbookPath = "App_Data\\uploads\\active-inventory.xlsx";
     private readonly SemaphoreSlim _lock = new(1, 1);
 
     public FileInfo GetWorkbookFile()
@@ -15,14 +16,16 @@ public sealed class FileUploadedWorkbookStorage(IConfiguration configuration, IH
         var configuredPath = configuration["InventorySource:UploadedWorkbookPath"];
         var path = string.IsNullOrWhiteSpace(configuredPath)
             ? Path.Combine("App_Data", "uploads", "active-inventory.xlsx")
-            : Environment.ExpandEnvironmentVariables(configuredPath);
+            : NormalizeConfiguredPath(Environment.ExpandEnvironmentVariables(configuredPath));
 
         if (!Path.IsPathRooted(path))
         {
             path = Path.Combine(environment.ContentRootPath, path);
         }
 
-        return new FileInfo(path);
+        var target = new FileInfo(path);
+        MoveLegacyWorkbookIfNeeded(target);
+        return target;
     }
 
     public async Task<UploadedWorkbookSaveResult> SaveAsync(string fileName, Stream content, CancellationToken cancellationToken = default)
@@ -94,5 +97,27 @@ public sealed class FileUploadedWorkbookStorage(IConfiguration configuration, IH
         {
             throw new InvalidOperationException("The selected file could not be opened as a valid .xlsx workbook.", exception);
         }
+    }
+
+    private static string NormalizeConfiguredPath(string path) =>
+        path.Replace('\\', Path.DirectorySeparatorChar)
+            .Replace('/', Path.DirectorySeparatorChar);
+
+    private void MoveLegacyWorkbookIfNeeded(FileInfo target)
+    {
+        if (target.Exists)
+        {
+            return;
+        }
+
+        var legacyPath = Path.Combine(environment.ContentRootPath, LegacyRelativeWorkbookPath);
+        var legacy = new FileInfo(legacyPath);
+        if (!legacy.Exists || string.Equals(legacy.FullName, target.FullName, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(target.DirectoryName!);
+        File.Copy(legacy.FullName, target.FullName, overwrite: true);
     }
 }
